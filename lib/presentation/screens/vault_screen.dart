@@ -26,14 +26,17 @@ class _VaultScreenState extends ConsumerState<VaultScreen> {
   Widget build(BuildContext context) {
     final state = ref.watch(vaultControllerProvider);
     final settings = ref.watch(settingsControllerProvider);
-    final connectedHostIds = ref.watch(
-      sessionControllerProvider.select(
-        (value) => {
-          for (final session in value.sessions)
-            if (session.connected) session.host.id,
-        }.join('\n'),
-      ),
-    ).split('\n').toSet();
+    final connectedHostIds = ref
+        .watch(
+          sessionControllerProvider.select(
+            (value) => {
+              for (final session in value.sessions)
+                if (session.connected) session.host.id,
+            }.join('\n'),
+          ),
+        )
+        .split('\n')
+        .toSet();
     final viewMode = settings.serverViewMode;
     final vault = state.data;
     final groups = vault?.customGroups ?? const <String>[];
@@ -186,8 +189,8 @@ class _VaultScreenState extends ConsumerState<VaultScreen> {
                               itemCount: hosts.length,
                               itemBuilder: (_, index) => _HostCard(
                                 host: hosts[index],
-                                connected: connectedHostIds
-                                    .contains(hosts[index].id),
+                                connected:
+                                    connectedHostIds.contains(hosts[index].id),
                                 onConnect: () => _showHostDetails(hosts[index]),
                                 onEdit: () => _editHost(hosts[index]),
                               ),
@@ -205,8 +208,8 @@ class _VaultScreenState extends ConsumerState<VaultScreen> {
                                   const SizedBox(height: 8),
                               itemBuilder: (_, index) => _HostTile(
                                 host: hosts[index],
-                                connected: connectedHostIds
-                                    .contains(hosts[index].id),
+                                connected:
+                                    connectedHostIds.contains(hosts[index].id),
                                 onConnect: () => _showHostDetails(hosts[index]),
                                 onEdit: () => _editHost(hosts[index]),
                               ),
