@@ -55,7 +55,13 @@ class HomeShell extends ConsumerWidget {
         body: Stack(
           fit: StackFit.expand,
           children: [
-            if (customBackground) CustomBackgroundImage(settings: settings),
+            // Keep this slot even without a background: inserting it only on
+            // some tabs shifted the page stack to another child position, so
+            // Flutter rebuilt every page and the terminal lost its state.
+            if (customBackground)
+              CustomBackgroundImage(settings: settings)
+            else
+              const SizedBox.shrink(),
             Theme(
               data: customBackground
                   ? Theme.of(context).copyWith(

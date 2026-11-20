@@ -272,4 +272,49 @@ void main() {
     expect(stored.data['lastConnectedAt'], isNotNull);
     expect(controller.state.data!.hosts.single.label, 'After edit');
   });
+
+  test('detected system info is stored without scheduling a cloud upload',
+      () async {
+    const secureStorageChannel =
+        MethodChannel('plugins.it_nomads.com/flutter_secure_storage');
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(secureStorageChannel, (_) async => null);
+    addTearDown(() {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(secureStorageChannel, null);
+    });
+    SharedPreferences.setMockInitialValues({
+      'netcatty_mobile_vault_v1': jsonEncode({
+        'hosts': [
+          {
+            'id': 'host-1',
+            'label': 'Server',
+            'hostname': '192.0.2.10',
+            'username': 'root',
+            'updatedAt': 1,
+          },
+        ],
+        'keys': const [],
+        'snippets': const [],
+        'customGroups': const [],
+      }),
+    });
+    final repository = await VaultRepository.open();
+    final controller = VaultController(repository);
+    await controller.load();
+    var localChanges = 0;
+    final subscription =
+        repository.localChanges.listen((_) => localChanges++);
+    addTearDown(subscription.cancel);
+
+    const fields = {'os': 'linux', 'distro': 'debian'};
+    await controller.recordSystemInfo('host-1', fields);
+    await controller.recordSystemInfo('host-1', fields);
+    await Future<void>.delayed(Duration.zero);
+
+    final stored = repository.loadVaultPreview()!.hosts.single;
+    expect(stored.data['distro'], 'debian');
+    expect(stored.data['updatedAt'], 1);
+    expect(localChanges, 0);
+  });
 }

@@ -19,7 +19,8 @@ class HostSystemIcon extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final distro = normalizeDistroId(systemInfo?.distro ?? host.distro);
-    final color = _brandColors[distro] ?? Theme.of(context).colorScheme.primary;
+    final scheme = Theme.of(context).colorScheme;
+    final color = _brandColors[distro] ?? scheme.primary;
     return Semantics(
       label:
           '${systemInfo?.prettyName ?? host.systemInfo?.prettyName ?? distro} 系统',
@@ -28,10 +29,11 @@ class HostSystemIcon extends StatelessWidget {
         width: size,
         height: size,
         padding: EdgeInsets.all(size * 0.2),
+        // A quiet neutral tile: brand-tinted frames made every row orange,
+        // red or yellow and competed with the host names.
         decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.16),
+          color: scheme.onSurface.withValues(alpha: 0.05),
           borderRadius: BorderRadius.circular(size * 0.27),
-          border: Border.all(color: color.withValues(alpha: 0.32)),
         ),
         child: SvgPicture.asset(
           'assets/distro/$distro.svg',

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -196,6 +197,27 @@ class VaultController extends StateNotifier<VaultState> {
       rethrow;
     }
   }
+
+  /// Stores the OS details detected after a connection on the host as
+  /// currently stored. Like [markConnected] this is device-local telemetry:
+  /// it neither bumps `updatedAt` nor schedules a cloud upload (desktop
+  /// Netcatty fixed the same "SSH connect dirties auto-sync" issue), and an
+  /// unchanged result writes nothing.
+  Future<void> recordSystemInfo(String hostId, Map<String, Object?> fields) =>
+      _serialized(() async {
+        final vault = await ready();
+        final index = vault.hosts.indexWhere((host) => host.id == hostId);
+        if (index < 0) return;
+        final current = vault.hosts[index];
+        final unchanged = fields.entries.every(
+          (entry) =>
+              jsonEncode(current.data[entry.key]) == jsonEncode(entry.value),
+        );
+        if (unchanged) return;
+        final hosts = [...vault.hosts];
+        hosts[index] = HostProfile({...current.data, ...fields});
+        await _save(vault.copyWith(hosts: hosts), remote: true);
+      });
 
   Future<void> markConnected(HostProfile host) =>
       _serialized(() => _markConnected(host.id));

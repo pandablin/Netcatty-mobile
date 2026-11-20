@@ -231,12 +231,9 @@ class _VaultScreenState extends ConsumerState<VaultScreen> {
             keyboardInteractive: _promptKeyboardInteractive,
             requestPassphrase: _promptKeyPassphrase,
           );
+      // No "connected" snackbar: it covered the terminal toolbar for four
+      // seconds, and the tab and host list already show the connection.
       await _savePendingPassphrases();
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: LText('${host.label} 已连接')));
-      }
     } catch (error) {
       _passphrasesToSave.clear();
       if (mounted) {
@@ -298,7 +295,9 @@ class _VaultScreenState extends ConsumerState<VaultScreen> {
     final action = await showDialog<_HostAction>(
       context: context,
       builder: (context) => AlertDialog(
-        icon: HostSystemIcon(host: host, size: 52),
+        // AlertDialog stretches its icon to the full width; keep the logo
+        // at its own size instead of a long coloured bar.
+        icon: Center(child: HostSystemIcon(host: host, size: 52)),
         title: LText(host.label),
         content: SizedBox(
           width: 440,

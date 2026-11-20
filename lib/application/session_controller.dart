@@ -376,13 +376,11 @@ class SessionController extends StateNotifier<SessionState> {
     try {
       final info = await ServerMonitorService().detect(session);
       session.systemInfo = info;
-      final updated = HostProfile({
-        ...host.data,
+      await vaultController.recordSystemInfo(host.id, {
         'os': info.platform,
         'distro': info.distro,
         'systemInfo': info.toJson(),
       });
-      await vaultController.upsertHost(updated);
       if (!mounted) return;
       state = state.copyWith(
         sessions: [...state.sessions],
