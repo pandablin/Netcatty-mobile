@@ -33,9 +33,8 @@ class HostSystemIcon extends StatelessWidget {
         // red or yellow and competed with the host names.
         decoration: BoxDecoration(
           color: scheme.onSurface.withValues(
-            alpha: Theme.of(context).brightness == Brightness.dark
-                ? 0.08
-                : 0.05,
+            alpha:
+                Theme.of(context).brightness == Brightness.dark ? 0.08 : 0.05,
           ),
           borderRadius: BorderRadius.circular(size * 0.27),
         ),
