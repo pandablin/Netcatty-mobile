@@ -1,4 +1,8 @@
 const englishTranslations = <String, String>{
+  '弹出键盘': 'Show keyboard',
+  '点击终端弹出键盘': 'Tap terminal to show keyboard',
+  '关闭后只能用工具栏右下角的键盘按钮弹出键盘；向上翻看历史时点击终端始终不会弹出键盘':
+      'When off, only the keyboard button at the bottom right of the toolbar shows the keyboard. Tapping while scrolled back through history never shows it.',
   '输入私钥口令': 'Enter key passphrase',
   '口令不正确，请重试': 'Incorrect passphrase. Try again.',
   '口令': 'Passphrase',

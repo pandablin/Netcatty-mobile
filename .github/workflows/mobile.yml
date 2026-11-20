@@ -6,6 +6,12 @@ on:
   pull_request:
   workflow_dispatch:
 
+# A newer push to the same branch supersedes the previous run, so queued
+# macOS jobs do not pile up behind stale commits.
+concurrency:
+  group: mobile-ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -80,7 +86,10 @@ jobs:
           retention-days: 30
 
   ios:
-    runs-on: macos-15
+    # macos-latest is macOS 26 with a newer Xcode / iOS SDK, closer to the
+    # iOS 27 devices this fork targets, and has more runner capacity.
+    runs-on: macos-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - name: Read app version

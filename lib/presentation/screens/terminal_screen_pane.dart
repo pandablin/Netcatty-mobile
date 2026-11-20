@@ -159,6 +159,47 @@ class _TerminalPictureInPictureHeader extends StatelessWidget {
       );
 }
 
+/// Connects the toolbar keyboard button with the terminal pane that owns
+/// keyboard input (the active tab), which lives deeper in the widget tree.
+class _TerminalKeyboardBridge {
+  final open = ValueNotifier<bool>(false);
+  Object? _owner;
+  VoidCallback? _show;
+  bool _disposed = false;
+
+  void attach(Object owner, VoidCallback show, {required bool focused}) {
+    _owner = owner;
+    _show = show;
+    _publish(focused);
+  }
+
+  void detach(Object owner) {
+    if (!identical(_owner, owner)) return;
+    _owner = null;
+    _show = null;
+    _publish(false);
+  }
+
+  void report(Object owner, bool focused) {
+    if (identical(_owner, owner)) _publish(focused);
+  }
+
+  void show() => _show?.call();
+
+  /// Panes attach and detach while the tree is building or being finalized,
+  /// where rebuilding the toolbar is not allowed, so publish afterwards.
+  void _publish(bool focused) {
+    scheduleMicrotask(() {
+      if (!_disposed) open.value = focused;
+    });
+  }
+
+  void dispose() {
+    _disposed = true;
+    open.dispose();
+  }
+}
+
 class _TerminalPane extends StatefulWidget {
   const _TerminalPane({
     super.key,
@@ -167,12 +208,20 @@ class _TerminalPane extends StatefulWidget {
     required this.secureKeyboard,
     required this.pictureInPicture,
     required this.transparentBackground,
+    this.tapToKeyboard = true,
+    this.keyboard,
   });
   final ActiveTerminalSession session;
   final double fontSize;
   final bool secureKeyboard;
   final bool pictureInPicture;
   final bool transparentBackground;
+
+  /// Whether a tap may open the soft keyboard (setting, upstream #36).
+  final bool tapToKeyboard;
+
+  /// Set only on the pane that receives toolbar keyboard requests.
+  final _TerminalKeyboardBridge? keyboard;
 
   @override
   State<_TerminalPane> createState() => _TerminalPaneState();
@@ -185,6 +234,7 @@ class _TerminalPaneState extends State<_TerminalPane> {
   var _terminalViewKey = GlobalKey<TerminalViewState>();
   final _terminalStackKey = GlobalKey();
   final _scrollController = ScrollController();
+  final _focusNode = FocusNode(debugLabel: 'terminal');
   Offset? _dragPointerToAnchor;
   Timer? _pictureInPictureUpdateTimer;
   Timer? _copyHoldTimer;
@@ -197,6 +247,8 @@ class _TerminalPaneState extends State<_TerminalPane> {
     super.initState();
     _alternateScreen = widget.session.terminal.isUsingAltBuffer;
     widget.session.terminal.addListener(_onTerminalChanged);
+    _focusNode.addListener(_onFocusChanged);
+    widget.keyboard?.attach(this, _showKeyboard, focused: _focusNode.hasFocus);
     if (widget.pictureInPicture) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _sendPipUpdate());
     }
@@ -209,6 +261,11 @@ class _TerminalPaneState extends State<_TerminalPane> {
       // xterm keeps the platform TextInputConnection alive while the view is
       // mounted. Recreate it so Android and iOS receive the new input type.
       _terminalViewKey = GlobalKey<TerminalViewState>();
+    }
+    if (!identical(oldWidget.keyboard, widget.keyboard)) {
+      oldWidget.keyboard?.detach(this);
+      widget.keyboard
+          ?.attach(this, _showKeyboard, focused: _focusNode.hasFocus);
     }
     if (oldWidget.session.terminal != widget.session.terminal) {
       oldWidget.session.terminal.removeListener(_onTerminalChanged);
@@ -225,11 +282,38 @@ class _TerminalPaneState extends State<_TerminalPane> {
   @override
   void dispose() {
     widget.session.terminal.removeListener(_onTerminalChanged);
+    widget.keyboard?.detach(this);
     _pictureInPictureUpdateTimer?.cancel();
     _copyHoldTimer?.cancel();
     _controller.dispose();
     _scrollController.dispose();
+    _focusNode
+      ..removeListener(_onFocusChanged)
+      ..dispose();
     super.dispose();
+  }
+
+  void _onFocusChanged() =>
+      widget.keyboard?.report(this, _focusNode.hasFocus);
+
+  bool get _scrolledToBottom {
+    if (!_scrollController.hasClients) return true;
+    final position = _scrollController.position;
+    return position.pixels >= position.maxScrollExtent - 2;
+  }
+
+  /// Decides, before xterm handles the tap, whether this touch may focus the
+  /// terminal and raise the keyboard. Raising it also jumps to the bottom,
+  /// which made scrolling back to read or copy output frustrating (#36), so
+  /// a tap while scrolled up into history never opens it.
+  void _gateKeyboardForTap() {
+    if (_focusNode.hasFocus) return;
+    _focusNode.canRequestFocus = widget.tapToKeyboard && _scrolledToBottom;
+  }
+
+  void _showKeyboard() {
+    _focusNode.canRequestFocus = true;
+    _terminalViewKey.currentState?.requestKeyboard();
   }
 
   void _onTerminalChanged() {
@@ -361,6 +445,7 @@ class _TerminalPaneState extends State<_TerminalPane> {
 
   Widget _terminalContent(TerminalTheme theme) => Listener(
         onPointerDown: (event) {
+          _gateKeyboardForTap();
           final mouse = event.kind == PointerDeviceKind.mouse;
           // Switching input devices changes policy; repeated finger gestures do not.
           if (_controller.pointerInput.inputs.contains(PointerInput.tap) !=
@@ -403,7 +488,8 @@ class _TerminalPaneState extends State<_TerminalPane> {
                 ? TextInputType.visiblePassword
                 : TextInputType.emailAddress,
             deleteDetection: true,
-            autofocus: !widget.pictureInPicture,
+            focusNode: _focusNode,
+            autofocus: !widget.pictureInPicture && widget.tapToKeyboard,
             padding: const EdgeInsets.all(8),
             textStyle: TerminalStyle(
                 fontSize: widget.fontSize, fontFamily: 'monospace'),

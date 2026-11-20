@@ -41,6 +41,7 @@ class TerminalScreen extends ConsumerStatefulWidget {
 class _TerminalScreenState extends ConsumerState<TerminalScreen> {
   var _split = false;
   StreamSubscription<bool>? _pictureInPictureSubscription;
+  final _keyboard = _TerminalKeyboardBridge();
 
   @override
   void initState() {
@@ -55,6 +56,7 @@ class _TerminalScreenState extends ConsumerState<TerminalScreen> {
   @override
   void dispose() {
     _pictureInPictureSubscription?.cancel();
+    _keyboard.dispose();
     super.dispose();
   }
 
@@ -273,6 +275,10 @@ class _TerminalScreenState extends ConsumerState<TerminalScreen> {
                                     fontSize: settings.terminalFontSize,
                                     secureKeyboard:
                                         settings.terminalSecureKeyboard,
+                                    tapToKeyboard:
+                                        settings.terminalTapToKeyboard,
+                                    keyboard:
+                                        pictureInPicture ? null : _keyboard,
                                     pictureInPicture: pictureInPicture,
                                     transparentBackground:
                                         customBackground && !pictureInPicture,
@@ -288,6 +294,9 @@ class _TerminalScreenState extends ConsumerState<TerminalScreen> {
                                       fontSize: settings.terminalFontSize,
                                       secureKeyboard:
                                           settings.terminalSecureKeyboard,
+                                      tapToKeyboard:
+                                          settings.terminalTapToKeyboard,
+                                      keyboard: _keyboard,
                                       pictureInPicture: false,
                                       transparentBackground: customBackground,
                                     ),
@@ -301,6 +310,8 @@ class _TerminalScreenState extends ConsumerState<TerminalScreen> {
                                       fontSize: settings.terminalFontSize,
                                       secureKeyboard:
                                           settings.terminalSecureKeyboard,
+                                      tapToKeyboard:
+                                          settings.terminalTapToKeyboard,
                                       pictureInPicture: false,
                                       transparentBackground: customBackground,
                                     ),
@@ -315,6 +326,8 @@ class _TerminalScreenState extends ConsumerState<TerminalScreen> {
                 ),
                 if (visibleSession != null && !pictureInPicture)
                   TerminalSpecialKeys(
+                    keyboardOpen: _keyboard.open,
+                    onShowKeyboard: _keyboard.show,
                     order: settings.terminalQuickKeys,
                     customKeys: settings.terminalCustomKeys,
                     inputController: visibleSession.input,

@@ -26,6 +26,8 @@ class TerminalSpecialKeys extends ConsumerStatefulWidget {
     required this.split,
     required this.onSplit,
     this.transparentBackground = false,
+    this.keyboardOpen,
+    this.onShowKeyboard,
   });
 
   final List<String> order;
@@ -42,6 +44,13 @@ class TerminalSpecialKeys extends ConsumerStatefulWidget {
   final bool split;
   final VoidCallback? onSplit;
   final bool transparentBackground;
+
+  /// Whether the active terminal currently holds keyboard focus. When given
+  /// together with [onShowKeyboard], the keyboard button toggles instead of
+  /// only hiding, so the keyboard stays reachable when tapping the terminal
+  /// no longer opens it.
+  final ValueListenable<bool>? keyboardOpen;
+  final VoidCallback? onShowKeyboard;
 
   @override
   ConsumerState<TerminalSpecialKeys> createState() =>
@@ -154,14 +163,7 @@ class _TerminalSpecialKeysState extends ConsumerState<TerminalSpecialKeys> {
                     onPressed: () => _customize(context, normalized),
                     icon: const Icon(Icons.tune, size: 20),
                   ),
-                  IconButton(
-                    key: const ValueKey('terminal-action-hide-keyboard'),
-                    visualDensity: VisualDensity.compact,
-                    tooltip: localized('收起键盘'),
-                    onPressed: () =>
-                        FocusManager.instance.primaryFocus?.unfocus(),
-                    icon: const Icon(Icons.keyboard_hide_outlined),
-                  ),
+                  _keyboardButton(),
                 ]
                     .map((button) => Expanded(child: button))
                     .toList(growable: false),
@@ -170,6 +172,28 @@ class _TerminalSpecialKeysState extends ConsumerState<TerminalSpecialKeys> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _keyboardButton() {
+    Widget button(bool open) => IconButton(
+          key: const ValueKey('terminal-action-hide-keyboard'),
+          visualDensity: VisualDensity.compact,
+          tooltip: localized(open ? '收起键盘' : '弹出键盘'),
+          onPressed: open || widget.onShowKeyboard == null
+              ? () => FocusManager.instance.primaryFocus?.unfocus()
+              : widget.onShowKeyboard,
+          icon: Icon(
+            open ? Icons.keyboard_hide_outlined : Icons.keyboard_outlined,
+          ),
+        );
+    final keyboardOpen = widget.keyboardOpen;
+    if (keyboardOpen == null || widget.onShowKeyboard == null) {
+      return button(true);
+    }
+    return ValueListenableBuilder<bool>(
+      valueListenable: keyboardOpen,
+      builder: (context, open, _) => button(open),
     );
   }
 

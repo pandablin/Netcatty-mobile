@@ -256,12 +256,14 @@ class SshService {
         output.onResize = (width, height, pixelWidth, pixelHeight) {
           session.resizeTerminal(width, height, pixelWidth, pixelHeight);
         };
-        session.stdout.listen(
-          (data) => output.write(utf8.decode(data, allowMalformed: true)),
-        );
-        session.stderr.listen(
-          (data) => output.write(utf8.decode(data, allowMalformed: true)),
-        );
+        // Decode as a stream: a multi-byte character (CJK text, emoji, box
+        // drawing) split across two SSH packets used to render as U+FFFD.
+        const Utf8Decoder(allowMalformed: true)
+            .bind(session.stdout)
+            .listen(output.write);
+        const Utf8Decoder(allowMalformed: true)
+            .bind(session.stderr)
+            .listen(output.write);
         final startup = host.startupCommand;
         if (startup != null && startup.isNotEmpty) {
           session.write(Uint8List.fromList(utf8.encode('$startup\n')));
@@ -514,20 +516,16 @@ class SshService {
       (value) => socket.add(utf8.encode(value)),
     );
     terminal.onOutput = sink.write;
-    socket.listen((bytes) {
-      final visible = <int>[];
-      for (var i = 0; i < bytes.length; i++) {
-        if (bytes[i] == 255 && i + 2 < bytes.length) {
-          final command = bytes[i + 1];
-          final option = bytes[i + 2];
-          socket.add([255, command == 253 ? 252 : 254, option]);
-          i += 2;
-        } else {
-          visible.add(bytes[i]);
-        }
-      }
-      terminal.write(utf8.decode(visible, allowMalformed: true));
-    });
+    final telnet = TelnetStreamFilter();
+    final text = const Utf8Decoder(allowMalformed: true)
+        .startChunkedConversion(_TextCallbackSink(terminal.write));
+    socket.listen(
+      (bytes) {
+        final visible = telnet.process(bytes, socket.add);
+        if (visible.isNotEmpty) text.add(visible);
+      },
+      onDone: text.close,
+    );
     return ActiveTerminalSession(
       id: sessionId,
       host: host,
@@ -573,6 +571,83 @@ List<int> socksAddress(String hostname) {
     throw const SocketException('目标主机名无效或过长');
   }
   return [3, domain.length, ...domain];
+}
+
+/// Strips Telnet commands from a byte stream and refuses every option the
+/// server offers or requests. Keeps state between chunks, so a command split
+/// across two TCP reads is neither shown on screen nor misparsed, handles
+/// escaped 0xFF data bytes and subnegotiation blocks, and never answers
+/// DONT/WONT, which RFC 854 forbids because it can loop forever.
+class TelnetStreamFilter {
+  static const _iac = 255;
+  static const _dont = 254;
+  static const _do = 253;
+  static const _wont = 252;
+  static const _will = 251;
+  static const _sb = 250;
+  static const _se = 240;
+
+  var _state = _TelnetState.data;
+  var _command = 0;
+
+  List<int> process(List<int> bytes, void Function(List<int> reply) reply) {
+    final visible = <int>[];
+    for (final byte in bytes) {
+      switch (_state) {
+        case _TelnetState.data:
+          if (byte == _iac) {
+            _state = _TelnetState.command;
+          } else {
+            visible.add(byte);
+          }
+        case _TelnetState.command:
+          if (byte == _iac) {
+            visible.add(_iac);
+            _state = _TelnetState.data;
+          } else if (byte >= _will && byte <= _dont) {
+            _command = byte;
+            _state = _TelnetState.option;
+          } else if (byte == _sb) {
+            _state = _TelnetState.subnegotiation;
+          } else {
+            _state = _TelnetState.data;
+          }
+        case _TelnetState.option:
+          if (_command == _do) reply([_iac, _wont, byte]);
+          if (_command == _will) reply([_iac, _dont, byte]);
+          _state = _TelnetState.data;
+        case _TelnetState.subnegotiation:
+          if (byte == _iac) _state = _TelnetState.subnegotiationIac;
+        case _TelnetState.subnegotiationIac:
+          _state = byte == _se
+              ? _TelnetState.data
+              : _TelnetState.subnegotiation;
+      }
+    }
+    return visible;
+  }
+}
+
+enum _TelnetState {
+  data,
+  command,
+  option,
+  subnegotiation,
+  subnegotiationIac,
+}
+
+class _TextCallbackSink implements Sink<String> {
+  _TextCallbackSink(this._onText);
+
+  final void Function(String text) _onText;
+
+  @override
+  void add(String data) {
+    if (data.isNotEmpty) _onText(data);
+  }
+
+  @override
+  void close() {}
 }
 
 const _connectionCancelledMarker = Object();

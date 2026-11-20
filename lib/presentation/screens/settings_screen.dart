@@ -398,6 +398,20 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                             : _setTerminalSecureKeyboard,
                       ),
                       SwitchListTile(
+                        key: const ValueKey('terminal-tap-to-keyboard'),
+                        contentPadding: EdgeInsets.zero,
+                        title: const LText('点击终端弹出键盘'),
+                        subtitle: const LText(
+                          '关闭后只能用工具栏右下角的键盘按钮弹出键盘；向上翻看历史时点击终端始终不会弹出键盘',
+                        ),
+                        value: ref
+                            .watch(settingsControllerProvider)
+                            .terminalTapToKeyboard,
+                        onChanged: (value) => ref
+                            .read(settingsControllerProvider.notifier)
+                            .updateTerminalTapToKeyboard(value),
+                      ),
+                      SwitchListTile(
                         contentPadding: EdgeInsets.zero,
                         title: const LText('SFTP 代码高亮'),
                         subtitle: const LText('编辑文件时显示语法颜色'),

@@ -57,6 +57,7 @@ class AppSettings {
     this.serverViewMode = 'grid',
     this.terminalFontSize = 14,
     this.terminalSecureKeyboard = false,
+    this.terminalTapToKeyboard = true,
     this.sftpSyntaxHighlight = true,
     this.customBackgroundEnabled = false,
     this.customBackgroundPath = '',
@@ -112,6 +113,7 @@ class AppSettings {
           .clamp(minTerminalFontSize, maxTerminalFontSize)
           .toDouble(),
       terminalSecureKeyboard: json['terminalSecureKeyboard'] == true,
+      terminalTapToKeyboard: json['terminalTapToKeyboard'] != false,
       sftpSyntaxHighlight: json['sftpSyntaxHighlight'] != false,
       customBackgroundEnabled: json['customBackgroundEnabled'] == true,
       customBackgroundPath: json['customBackgroundPath']?.toString() ?? '',
@@ -145,6 +147,10 @@ class AppSettings {
   final String serverViewMode;
   final double terminalFontSize;
   final bool terminalSecureKeyboard;
+
+  /// Whether tapping the terminal opens the soft keyboard. When off, only the
+  /// toolbar keyboard button does (upstream #36).
+  final bool terminalTapToKeyboard;
   final bool sftpSyntaxHighlight;
   final bool customBackgroundEnabled;
   final String customBackgroundPath;
@@ -167,6 +173,7 @@ class AppSettings {
     String? serverViewMode,
     double? terminalFontSize,
     bool? terminalSecureKeyboard,
+    bool? terminalTapToKeyboard,
     bool? sftpSyntaxHighlight,
     bool? customBackgroundEnabled,
     String? customBackgroundPath,
@@ -190,6 +197,8 @@ class AppSettings {
         terminalFontSize: terminalFontSize ?? this.terminalFontSize,
         terminalSecureKeyboard:
             terminalSecureKeyboard ?? this.terminalSecureKeyboard,
+        terminalTapToKeyboard:
+            terminalTapToKeyboard ?? this.terminalTapToKeyboard,
         sftpSyntaxHighlight: sftpSyntaxHighlight ?? this.sftpSyntaxHighlight,
         customBackgroundEnabled:
             customBackgroundEnabled ?? this.customBackgroundEnabled,
@@ -218,6 +227,7 @@ class AppSettings {
         'serverViewMode': serverViewMode,
         'terminalFontSize': terminalFontSize,
         'terminalSecureKeyboard': terminalSecureKeyboard,
+        'terminalTapToKeyboard': terminalTapToKeyboard,
         'sftpSyntaxHighlight': sftpSyntaxHighlight,
         'customBackgroundEnabled': customBackgroundEnabled,
         'customBackgroundPath': customBackgroundPath,
