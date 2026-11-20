@@ -127,9 +127,14 @@ class VaultRepository {
 
   Future<VaultData> _loadVaultWithSecrets() async {
     final vault = _cachedVault ?? _readStoredVault();
+    final hasSecrets = vault.hosts.isNotEmpty ||
+        vault.keys.isNotEmpty ||
+        vault.proxyProfiles.isNotEmpty;
     // One batched keychain query instead of one platform call per secret,
-    // which made the first host tap noticeably slow on iOS.
-    final all = await _readAllVaultSecrets();
+    // which made the first host tap noticeably slow on iOS. An empty vault
+    // has nothing to hydrate and skips the keychain entirely.
+    if (!hasSecrets) _persistedSecrets = <String, String>{};
+    final all = hasSecrets ? await _readAllVaultSecrets() : null;
     Future<String?> read(String key) {
       if (all != null) return Future.value(all[key]);
       return _secureStorage.read(key: key);

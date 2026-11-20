@@ -48,9 +48,12 @@ class VaultController extends StateNotifier<VaultState> {
     final operation = repository.loadVault();
     _activeLoad = operation;
     try {
-      state = VaultState(data: await operation);
+      final data = await operation;
+      if (mounted) state = VaultState(data: data);
     } catch (error) {
-      state = VaultState(data: state.data ?? VaultData.empty(), error: error);
+      if (mounted) {
+        state = VaultState(data: state.data ?? VaultData.empty(), error: error);
+      }
     } finally {
       if (identical(_activeLoad, operation)) _activeLoad = null;
     }
