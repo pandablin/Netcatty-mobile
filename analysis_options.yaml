@@ -1,5 +1,10 @@
 include: package:flutter_lints/flutter.yaml
 
+analyzer:
+  exclude:
+    # Vendored third-party packages keep their upstream style.
+    - packages/**
+
 linter:
   rules:
     avoid_print: true
