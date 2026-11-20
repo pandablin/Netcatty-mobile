@@ -32,12 +32,9 @@ class MainActivity : FlutterActivity() {
                     val active = call.argument<Boolean>("active") == true
                     if (active) {
                         requestNotificationPermission()
-                        ContextCompat.startForegroundService(
-                            this,
-                            Intent(this, SshKeepAliveService::class.java),
-                        )
+                        SshKeepAliveService.start(this)
                     } else {
-                        stopService(Intent(this, SshKeepAliveService::class.java))
+                        SshKeepAliveService.stop(this)
                     }
                     result.success(null)
                 }

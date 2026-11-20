@@ -206,7 +206,7 @@ class SshService {
           if (index < route.length - 1) {
             final next = route[index + 1];
             transport = await pending.waitFor<SSHForwardChannel>(
-              client.forwardLocal(next.hostname, next.port),
+              client.forwardLocal(bareHostname(next.hostname), next.port),
               onCancelled: (socket) => socket.destroy(),
             );
             pending.transport = transport;
@@ -367,10 +367,17 @@ class SshService {
   }) async {
     final proxy = _effectiveProxy(host, profiles);
     if (proxy == null || proxy.host.isEmpty || proxy.port <= 0) {
-      return SSHSocket.connect(host.hostname, host.port, timeout: timeout);
+      return SSHSocket.connect(
+        bareHostname(host.hostname),
+        host.port,
+        timeout: timeout,
+      );
     }
-    final socket =
-        await Socket.connect(proxy.host, proxy.port, timeout: timeout);
+    final socket = await Socket.connect(
+      bareHostname(proxy.host),
+      proxy.port,
+      timeout: timeout,
+    );
     final cursor = _SocketCursor(socket);
     try {
       switch (proxy.type) {
@@ -392,7 +399,7 @@ class SshService {
     ProxyConfig proxy,
     HostProfile target,
   ) async {
-    final authority = '${target.hostname}:${target.port}';
+    final authority = hostAuthority(target.hostname, target.port);
     final auth = proxy.username?.isNotEmpty == true
         ? 'Proxy-Authorization: Basic ${base64Encode(utf8.encode('${proxy.username}:${proxy.password ?? ''}'))}\r\n'
         : '';
@@ -437,15 +444,11 @@ class SshService {
     } else if (greeting[1] != 0) {
       throw const SocketException('SOCKS5 代理认证方式不受支持');
     }
-    final domain = utf8.encode(target.hostname);
-    if (domain.length > 255) throw const SocketException('目标主机名过长');
     socket.add([
       5,
       1,
       0,
-      3,
-      domain.length,
-      ...domain,
+      ...socksAddress(target.hostname),
       target.port >> 8,
       target.port & 0xff,
     ]);
@@ -473,7 +476,7 @@ class SshService {
   ) async {
     final socket = await pending.waitFor(
       Socket.connect(
-        host.hostname,
+        bareHostname(host.hostname),
         host.port,
         timeout: const Duration(seconds: 15),
       ),
@@ -512,6 +515,41 @@ class SshService {
       telnetSocket: socket,
     );
   }
+}
+
+/// Strips the square brackets users often type around IPv6 literals
+/// (`[2001:db8::1]`), which `Socket.connect` cannot resolve.
+String bareHostname(String hostname) {
+  final value = hostname.trim();
+  if (value.length > 2 && value.startsWith('[') && value.endsWith(']')) {
+    return value.substring(1, value.length - 1);
+  }
+  return value;
+}
+
+/// `host:port` for an HTTP CONNECT request line, bracketing IPv6 literals as
+/// RFC 7230 requires (`[2001:db8::1]:22`).
+String hostAuthority(String hostname, int port) {
+  final host = bareHostname(hostname);
+  return host.contains(':') ? '[$host]:$port' : '$host:$port';
+}
+
+/// SOCKS5 ATYP + DST.ADDR for [hostname]: IP literals are sent as IPv4/IPv6
+/// addresses (some proxies refuse IPv6 literals in the domain-name form).
+List<int> socksAddress(String hostname) {
+  final host = bareHostname(hostname);
+  final address = InternetAddress.tryParse(host);
+  if (address != null) {
+    return [
+      address.type == InternetAddressType.IPv6 ? 4 : 1,
+      ...address.rawAddress,
+    ];
+  }
+  final domain = utf8.encode(host);
+  if (domain.isEmpty || domain.length > 255) {
+    throw const SocketException('目标主机名无效或过长');
+  }
+  return [3, domain.length, ...domain];
 }
 
 const _connectionCancelledMarker = Object();
