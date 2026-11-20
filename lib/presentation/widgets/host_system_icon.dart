@@ -32,12 +32,24 @@ class HostSystemIcon extends StatelessWidget {
         // A quiet neutral tile: brand-tinted frames made every row orange,
         // red or yellow and competed with the host names.
         decoration: BoxDecoration(
-          color: scheme.onSurface.withValues(alpha: 0.05),
+          color: scheme.onSurface.withValues(
+            alpha: Theme.of(context).brightness == Brightness.dark
+                ? 0.08
+                : 0.05,
+          ),
           borderRadius: BorderRadius.circular(size * 0.27),
         ),
         child: SvgPicture.asset(
           'assets/distro/$distro.svg',
           fit: BoxFit.contain,
+          // Most logos are plain black paths and vanish on a dark surface;
+          // render them as one light monochrome tone in dark mode.
+          colorFilter: Theme.of(context).brightness == Brightness.dark
+              ? ColorFilter.mode(
+                  scheme.onSurface.withValues(alpha: 0.88),
+                  BlendMode.srcIn,
+                )
+              : null,
           placeholderBuilder: (_) => Icon(
             Icons.dns_outlined,
             size: size * 0.55,
