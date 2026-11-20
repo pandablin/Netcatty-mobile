@@ -85,10 +85,10 @@ class _VaultScreenState extends ConsumerState<VaultScreen> {
                       .read(settingsControllerProvider.notifier)
                       .update(settings.copyWith(serverViewMode: value)),
                   itemBuilder: (_) => [
-                    for (final (mode, icon, label) in const [
-                      ('grid', Icons.grid_view_outlined, '网格视图'),
-                      ('list', Icons.view_list_outlined, '列表视图'),
-                      ('tree', Icons.account_tree_outlined, '树形视图'),
+                    for (final (label, mode, icon) in const [
+                      ('网格视图', 'grid', Icons.grid_view_outlined),
+                      ('列表视图', 'list', Icons.view_list_outlined),
+                      ('树形视图', 'tree', Icons.account_tree_outlined),
                     ])
                       PopupMenuItem(
                         value: mode,
@@ -182,7 +182,7 @@ class _VaultScreenState extends ConsumerState<VaultScreen> {
                               gridDelegate:
                                   const SliverGridDelegateWithMaxCrossAxisExtent(
                                 maxCrossAxisExtent: 230,
-                                mainAxisExtent: 128,
+                                mainAxisExtent: 136,
                                 crossAxisSpacing: 10,
                                 mainAxisSpacing: 10,
                               ),
