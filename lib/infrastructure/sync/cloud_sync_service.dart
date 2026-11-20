@@ -79,6 +79,11 @@ class CloudSyncService {
 
   final VaultRepository repository;
 
+  /// Last Gist download per sync target. Sent back as If-None-Match, so the
+  /// periodic check costs a 304 instead of re-downloading a vault that can be
+  /// several megabytes when nothing changed.
+  final _gistCache = <String, ({String etag, _RemoteVault remote})>{};
+
   /// Sanity cap for the Gist API metadata response. It carries the revision
   /// history (one entry per sync) and every other file in the gist, so it can
   /// grow far beyond the vault itself and must not count against the vault
@@ -361,6 +366,14 @@ class CloudSyncService {
     );
   }
 
+  _RemoteVault _rememberGist(String? target, _RemoteVault remote) {
+    final etag = remote.revision;
+    if (target != null && etag != null && etag.isNotEmpty) {
+      _gistCache[target] = (etag: etag, remote: remote);
+    }
+    return remote;
+  }
+
   Future<_RemoteVault?> _download(SyncConnection connection) async {
     if (connection.type == SyncProviderType.githubGist &&
         (connection.resourceId == null || connection.resourceId!.isEmpty)) {
@@ -382,6 +395,10 @@ class CloudSyncService {
         response.revision,
       );
     }
+    final gistTarget = connection.type == SyncProviderType.githubGist
+        ? _syncTarget(connection)
+        : null;
+    final cachedGist = gistTarget == null ? null : _gistCache[gistTarget];
     final response = connection.type == SyncProviderType.webdav
         ? await _request(_client.get(
             _webdavUri(connection),
@@ -389,8 +406,15 @@ class CloudSyncService {
           ))
         : await _request(_client.get(
             Uri.parse('https://api.github.com/gists/${connection.resourceId}'),
-            headers: _githubHeaders(connection),
+            headers: {
+              ..._githubHeaders(connection),
+              if (cachedGist != null) 'if-none-match': cachedGist.etag,
+            },
           ));
+    if (response.statusCode == 304 && cachedGist != null) {
+      return cachedGist.remote;
+    }
+    if (gistTarget != null) _gistCache.remove(gistTarget);
     if (response.statusCode == 404) return null;
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw StateError('云端读取失败 (${response.statusCode})');
@@ -423,16 +447,22 @@ class CloudSyncService {
         throw StateError('Gist 大文件读取失败 (${raw.statusCode})');
       }
       _ensureResponseSize(raw);
-      return _RemoteVault(
-        SyncedVaultFile.fromJson(_decodeJsonObject(raw.body)),
-        response.headers['etag'],
+      return _rememberGist(
+        gistTarget,
+        _RemoteVault(
+          SyncedVaultFile.fromJson(_decodeJsonObject(raw.body)),
+          response.headers['etag'],
+        ),
       );
     }
-    return _RemoteVault(
-      SyncedVaultFile.fromJson(
-        jsonDecode(file['content'] as String) as Map<String, dynamic>,
+    return _rememberGist(
+      gistTarget,
+      _RemoteVault(
+        SyncedVaultFile.fromJson(
+          jsonDecode(file['content'] as String) as Map<String, dynamic>,
+        ),
+        response.headers['etag'],
       ),
-      response.headers['etag'],
     );
   }
 

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:isolate';
 import 'dart:math';
 import 'dart:typed_data';
 
@@ -26,12 +27,49 @@ class NetcattyCrypto {
   static const ivLength = 12;
   static const tagLength = 16;
 
-  static final _pbkdf2 = Pbkdf2(
-    macAlgorithm: Hmac.sha256(),
-    iterations: iterations,
-    bits: 256,
-  );
-  static final _aes = AesGcm.with256bits();
+  /// Recently derived keys, by (password, salt, iterations). PBKDF2 with
+  /// 600,000 rounds takes seconds in pure Dart on a phone, and one sync
+  /// decrypts the same remote file several times (merge, read-back check,
+  /// periodic checks while nothing changed). Memory only, a few entries.
+  static final _keyCache = <(String, String, int), Uint8List>{};
+  static const _keyCacheSize = 4;
+
+  /// Derives (or reuses) the AES key on a background isolate so the UI keeps
+  /// rendering while PBKDF2 runs.
+  static Future<Uint8List> _deriveKey(
+    String password,
+    List<int> salt,
+    int rounds,
+  ) async {
+    final cacheKey = (password, base64Encode(salt), rounds);
+    final cached = _keyCache.remove(cacheKey);
+    if (cached != null) {
+      _keyCache[cacheKey] = cached;
+      return cached;
+    }
+    final key = await Isolate.run(() async {
+      final secret = await Pbkdf2(
+        macAlgorithm: Hmac.sha256(),
+        iterations: rounds,
+        bits: 256,
+      ).deriveKeyFromPassword(password: password, nonce: salt);
+      return Uint8List.fromList(await secret.extractBytes());
+    });
+    _keyCache[cacheKey] = key;
+    while (_keyCache.length > _keyCacheSize) {
+      _keyCache.remove(_keyCache.keys.first);
+    }
+    return key;
+  }
+
+  // Kept out of encrypt(): a closure there would put the Random object into
+  // the context that the isolate closure captures and sends.
+  static Uint8List _randomBytes(int length) {
+    final random = Random.secure();
+    return Uint8List.fromList(
+      List<int>.generate(length, (_) => random.nextInt(256)),
+    );
+  }
 
   static Future<SyncedVaultFile> encrypt({
     required VaultData vault,
@@ -41,32 +79,30 @@ class NetcattyCrypto {
     required String appVersion,
     int previousVersion = 0,
   }) async {
-    final random = Random.secure();
-    final salt = Uint8List.fromList(
-      List<int>.generate(saltLength, (_) => random.nextInt(256)),
-    );
-    final iv = Uint8List.fromList(
-      List<int>.generate(ivLength, (_) => random.nextInt(256)),
-    );
-    final key = await _pbkdf2.deriveKeyFromPassword(
-      password: password,
-      nonce: salt,
-    );
+    final salt = _randomBytes(saltLength);
+    final iv = _randomBytes(ivLength);
+    final key = await _deriveKey(password, salt, iterations);
     final convergent = vault.extras['convergentSync'];
     final isConvergentV2 = convergent is Map &&
         convergent['schemaVersion'] == 2 &&
         convergent['encoding'] == 'materialized-winner-v1';
-    // Legacy writes remain v1. When the remote already uses desktop's
-    // convergent format, the caller supplies an updated envelope and we must
-    // preserve it together with the advertised plaintext schema version.
-    final cleartext = utf8.encode(jsonEncode(vault.toJson(
-      legacySyncSnapshot: !isConvergentV2,
-    )));
-    final box = await _aes.encrypt(cleartext, secretKey: key, nonce: iv);
-    final ciphertextAndTag = Uint8List.fromList([
-      ...box.cipherText,
-      ...box.mac.bytes,
-    ]);
+    // Serialising and encrypting a multi-megabyte vault also runs off the UI
+    // isolate.
+    final payload = await Isolate.run(() async {
+      // Legacy writes remain v1. When the remote already uses desktop's
+      // convergent format, the caller supplies an updated envelope and we
+      // must preserve it together with the advertised plaintext schema
+      // version.
+      final cleartext = utf8.encode(jsonEncode(vault.toJson(
+        legacySyncSnapshot: !isConvergentV2,
+      )));
+      final box = await AesGcm.with256bits().encrypt(
+        cleartext,
+        secretKey: SecretKey(key),
+        nonce: iv,
+      );
+      return base64Encode([...box.cipherText, ...box.mac.bytes]);
+    });
     return SyncedVaultFile(
       meta: {
         'version': previousVersion + 1,
@@ -81,7 +117,7 @@ class NetcattyCrypto {
         'kdfIterations': iterations,
         if (isConvergentV2) 'syncSchemaVersion': 2,
       },
-      payload: base64Encode(ciphertextAndTag),
+      payload: payload,
     );
   }
 
@@ -95,27 +131,30 @@ class NetcattyCrypto {
     }
     final salt = base64Decode(file.meta['salt'] as String);
     final iv = base64Decode(file.meta['iv'] as String);
-    final body = base64Decode(file.payload);
-    if (body.length <= tagLength) {
-      throw const FormatException('Encrypted payload is truncated');
-    }
-    final key = await Pbkdf2(
-      macAlgorithm: Hmac.sha256(),
-      iterations: (file.meta['kdfIterations'] as num?)?.toInt() ?? iterations,
-      bits: 256,
-    ).deriveKeyFromPassword(password: password, nonce: salt);
-    final box = SecretBox(
-      body.sublist(0, body.length - tagLength),
-      nonce: iv,
-      mac: Mac(body.sublist(body.length - tagLength)),
-    );
-    try {
-      final cleartext = await _aes.decrypt(box, secretKey: key);
-      return VaultData.fromJson(
-        jsonDecode(utf8.decode(cleartext)) as Map<String, dynamic>,
+    final payload = file.payload;
+    final rounds = (file.meta['kdfIterations'] as num?)?.toInt() ?? iterations;
+    final key = await _deriveKey(password, salt, rounds);
+    return Isolate.run(() async {
+      final body = base64Decode(payload);
+      if (body.length <= tagLength) {
+        throw const FormatException('Encrypted payload is truncated');
+      }
+      final box = SecretBox(
+        body.sublist(0, body.length - tagLength),
+        nonce: iv,
+        mac: Mac(body.sublist(body.length - tagLength)),
       );
-    } on SecretBoxAuthenticationError {
-      throw const FormatException('同步密码错误或云端文件已损坏');
-    }
+      try {
+        final cleartext = await AesGcm.with256bits().decrypt(
+          box,
+          secretKey: SecretKey(key),
+        );
+        return VaultData.fromJson(
+          jsonDecode(utf8.decode(cleartext)) as Map<String, dynamic>,
+        );
+      } on SecretBoxAuthenticationError {
+        throw const FormatException('同步密码错误或云端文件已损坏');
+      }
+    });
   }
 }

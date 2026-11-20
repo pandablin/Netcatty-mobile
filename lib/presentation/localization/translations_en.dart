@@ -1,4 +1,5 @@
 const englishTranslations = <String, String>{
+  '已连接': 'Connected',
   'Gist 元数据过大（修订历史或其他文件太多），请新建一个只存放保险库的 Gist':
       'The gist metadata is too large (too many revisions or other files). Create a new gist that only holds the vault',
   'Gist 中的保险库文件超过 10 MB，GitHub 无法通过 API 完整读取，请改用 WebDAV 或 S3 同步':

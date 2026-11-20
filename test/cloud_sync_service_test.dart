@@ -180,6 +180,63 @@ void main() {
     expect(await repository.loadSyncVersionCheckpoint(), isNotNull);
   });
 
+  test('unchanged Gist is revalidated with If-None-Match instead of downloaded',
+      () async {
+    SharedPreferences.setMockInitialValues({});
+    final repository = await VaultRepository.open();
+    await repository.saveSyncConnection(const SyncConnection(
+      type: SyncProviderType.githubGist,
+      endpoint: '',
+      username: 'octocat',
+      secret: 'token',
+      resourceId: 'gist-1',
+    ));
+    await repository.saveMasterPassword('sync-password');
+    final remoteFile = await NetcattyCrypto.encrypt(
+      vault: VaultData.empty(),
+      password: 'sync-password',
+      deviceId: 'remote-device',
+      deviceName: 'Remote',
+      appVersion: '1.3.0',
+      previousVersion: 6,
+    );
+    final ifNoneMatch = <String?>[];
+    var fullBodies = 0;
+    final client = MockClient((request) async {
+      ifNoneMatch.add(request.headers['if-none-match']);
+      if (request.headers['if-none-match'] == '"rev-7"') {
+        return http.Response('', 304);
+      }
+      fullBodies++;
+      return http.Response(
+        jsonEncode({
+          'files': {
+            'netcatty-vault.json': {
+              'content': jsonEncode(remoteFile.toJson()),
+              'truncated': false,
+            },
+          },
+        }),
+        200,
+        headers: {'etag': '"rev-7"'},
+      );
+    });
+    final service = CloudSyncService(
+      repository,
+      client: client,
+      deviceId: 'local-device',
+      appVersion: '1.3.1',
+    );
+
+    final first = await service.inspectVersions(VaultData.empty());
+    final second = await service.inspectVersions(VaultData.empty());
+
+    expect(ifNoneMatch, [null, '"rev-7"']);
+    expect(fullBodies, 1);
+    expect(first.cloudVersion, 7);
+    expect(second.cloudVersion, 7);
+  });
+
   test('Gist revision history does not count against the vault size limit',
       () async {
     SharedPreferences.setMockInitialValues({});

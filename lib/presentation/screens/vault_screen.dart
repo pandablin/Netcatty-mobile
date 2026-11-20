@@ -26,6 +26,14 @@ class _VaultScreenState extends ConsumerState<VaultScreen> {
   Widget build(BuildContext context) {
     final state = ref.watch(vaultControllerProvider);
     final settings = ref.watch(settingsControllerProvider);
+    final connectedHostIds = ref.watch(
+      sessionControllerProvider.select(
+        (value) => {
+          for (final session in value.sessions)
+            if (session.connected) session.host.id,
+        }.join('\n'),
+      ),
+    ).split('\n').toSet();
     final viewMode = settings.serverViewMode;
     final vault = state.data;
     final groups = vault?.customGroups ?? const <String>[];
@@ -73,28 +81,25 @@ class _VaultScreenState extends ConsumerState<VaultScreen> {
                   onSelected: (value) => ref
                       .read(settingsControllerProvider.notifier)
                       .update(settings.copyWith(serverViewMode: value)),
-                  itemBuilder: (_) => const [
-                    PopupMenuItem(
-                      value: 'grid',
-                      child: ListTile(
-                        leading: Icon(Icons.grid_view_outlined),
-                        title: LText('网格视图'),
+                  itemBuilder: (_) => [
+                    for (final (mode, icon, label) in const [
+                      ('grid', Icons.grid_view_outlined, '网格视图'),
+                      ('list', Icons.view_list_outlined, '列表视图'),
+                      ('tree', Icons.account_tree_outlined, '树形视图'),
+                    ])
+                      PopupMenuItem(
+                        value: mode,
+                        child: ListTile(
+                          leading: Icon(icon),
+                          title: LText(label),
+                          trailing: viewMode == mode
+                              ? Icon(
+                                  Icons.check,
+                                  color: Theme.of(context).colorScheme.primary,
+                                )
+                              : null,
+                        ),
                       ),
-                    ),
-                    PopupMenuItem(
-                      value: 'list',
-                      child: ListTile(
-                        leading: Icon(Icons.view_list_outlined),
-                        title: LText('列表视图'),
-                      ),
-                    ),
-                    PopupMenuItem(
-                      value: 'tree',
-                      child: ListTile(
-                        leading: Icon(Icons.account_tree_outlined),
-                        title: LText('树形视图'),
-                      ),
-                    ),
                   ],
                   icon: Icon(switch (viewMode) {
                     'list' => Icons.view_list_outlined,
@@ -174,19 +179,22 @@ class _VaultScreenState extends ConsumerState<VaultScreen> {
                               gridDelegate:
                                   const SliverGridDelegateWithMaxCrossAxisExtent(
                                 maxCrossAxisExtent: 230,
-                                mainAxisExtent: 148,
+                                mainAxisExtent: 128,
                                 crossAxisSpacing: 10,
                                 mainAxisSpacing: 10,
                               ),
                               itemCount: hosts.length,
                               itemBuilder: (_, index) => _HostCard(
                                 host: hosts[index],
+                                connected: connectedHostIds
+                                    .contains(hosts[index].id),
                                 onConnect: () => _showHostDetails(hosts[index]),
                                 onEdit: () => _editHost(hosts[index]),
                               ),
                             ),
                           'tree' => _HostTree(
                               hosts: hosts,
+                              connectedHostIds: connectedHostIds,
                               onConnect: _showHostDetails,
                               onEdit: _editHost,
                             ),
@@ -197,6 +205,8 @@ class _VaultScreenState extends ConsumerState<VaultScreen> {
                                   const SizedBox(height: 8),
                               itemBuilder: (_, index) => _HostTile(
                                 host: hosts[index],
+                                connected: connectedHostIds
+                                    .contains(hosts[index].id),
                                 onConnect: () => _showHostDetails(hosts[index]),
                                 onEdit: () => _editHost(hosts[index]),
                               ),
@@ -693,9 +703,11 @@ class _HostTree extends StatelessWidget {
     required this.hosts,
     required this.onConnect,
     required this.onEdit,
+    this.connectedHostIds = const {},
   });
 
   final List<HostProfile> hosts;
+  final Set<String> connectedHostIds;
   final ValueChanged<HostProfile> onConnect;
   final ValueChanged<HostProfile> onEdit;
 
@@ -730,7 +742,7 @@ class _HostTree extends StatelessWidget {
             initiallyExpanded: true,
             leading: Icon(
               group == '未分组'
-                  ? Icons.folder_off_outlined
+                  ? Icons.folder_open_outlined
                   : Icons.folder_outlined,
               color: Theme.of(context).colorScheme.primary,
             ),
@@ -741,7 +753,11 @@ class _HostTree extends StatelessWidget {
                 ListTile(
                   contentPadding: const EdgeInsets.only(left: 28, right: 8),
                   onTap: () => onConnect(host),
-                  leading: HostSystemIcon(host: host, size: 38),
+                  leading: _HostIcon(
+                    host: host,
+                    size: 38,
+                    connected: connectedHostIds.contains(host.id),
+                  ),
                   title: LText(host.label),
                   subtitle:
                       LText('${host.username}@${host.hostname}:${host.port}'),
@@ -759,13 +775,60 @@ class _HostTree extends StatelessWidget {
   }
 }
 
+/// Host icon with a green dot while a terminal session to it is open.
+class _HostIcon extends StatelessWidget {
+  const _HostIcon({
+    required this.host,
+    required this.size,
+    required this.connected,
+  });
+  final HostProfile host;
+  final double size;
+  final bool connected;
+
+  @override
+  Widget build(BuildContext context) {
+    final icon = HostSystemIcon(host: host, size: size);
+    if (!connected) return icon;
+    final dot = size * 0.28;
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        icon,
+        Positioned(
+          right: -dot * 0.2,
+          bottom: -dot * 0.2,
+          child: Tooltip(
+            message: localized('已连接'),
+            child: Container(
+              key: ValueKey('host-connected-${host.id}'),
+              width: dot,
+              height: dot,
+              decoration: BoxDecoration(
+                color: const Color(0xff2fb344),
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: Theme.of(context).colorScheme.surface,
+                  width: 2,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _HostCard extends StatelessWidget {
   const _HostCard({
     required this.host,
     required this.onConnect,
     required this.onEdit,
+    this.connected = false,
   });
   final HostProfile host;
+  final bool connected;
   final VoidCallback onConnect;
   final VoidCallback onEdit;
 
@@ -776,13 +839,13 @@ class _HostCard extends StatelessWidget {
           onTap: onConnect,
           onLongPress: onEdit,
           child: Padding(
-            padding: const EdgeInsets.all(14),
+            padding: const EdgeInsets.fromLTRB(14, 12, 6, 12),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
                   children: [
-                    HostSystemIcon(host: host, size: 40),
+                    _HostIcon(host: host, size: 40, connected: connected),
                     const Spacer(),
                     if (host.pinned) const Icon(Icons.push_pin, size: 16),
                     IconButton(
@@ -827,15 +890,17 @@ class _HostTile extends StatelessWidget {
     required this.host,
     required this.onConnect,
     required this.onEdit,
+    this.connected = false,
   });
   final HostProfile host;
+  final bool connected;
   final VoidCallback onConnect;
   final VoidCallback onEdit;
   @override
   Widget build(BuildContext context) => Card(
         child: ListTile(
           onTap: onConnect,
-          leading: HostSystemIcon(host: host, size: 42),
+          leading: _HostIcon(host: host, size: 42, connected: connected),
           title: LText(host.label),
           subtitle: LText('${host.username}@${host.hostname}:${host.port}'),
           trailing: IconButton(
