@@ -283,6 +283,9 @@ class SessionController extends StateNotifier<SessionState> {
   void setBackgrounded(bool backgrounded) {
     if (_backgrounded == backgrounded) return;
     _backgrounded = backgrounded;
+    for (final session in state.sessions) {
+      session.monitor?.setPaused(backgrounded);
+    }
     if (backgrounded) {
       _ensureBackgroundMaintenance();
       unawaited(_maintainBackgroundConnections());

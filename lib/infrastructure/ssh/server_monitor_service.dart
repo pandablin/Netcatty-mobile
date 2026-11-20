@@ -17,13 +17,58 @@ class SessionMonitor extends ChangeNotifier {
   Object? error;
   bool polling = false;
   bool _stopped = false;
+  bool _started = false;
+  bool _paused = false;
   Timer? _timer;
   final List<ServerStats> history = [];
 
+  /// Sampling rate while the monitor sheet is on screen.
+  static const watchedInterval = Duration(seconds: 3);
+
+  /// Background rate that keeps cached figures and a sparse chart history
+  /// without running a remote command on every tab every 3 seconds, which
+  /// cost battery and competed with the terminal on mobile links.
+  static const idleInterval = Duration(seconds: 15);
+
   void start() {
-    if (_timer != null || _stopped) return;
+    if (_started || _stopped) return;
+    _started = true;
     unawaited(refresh());
-    _timer = Timer.periodic(const Duration(seconds: 3), (_) => refresh());
+  }
+
+  /// Suspends sampling while the app is in the background. iOS suspends the
+  /// process anyway; on Android this avoids polling nobody can see.
+  void setPaused(bool paused) {
+    if (_paused == paused || _stopped) return;
+    _paused = paused;
+    if (paused) {
+      _timer?.cancel();
+      _timer = null;
+    } else if (_started) {
+      unawaited(refresh());
+    }
+  }
+
+  @override
+  void addListener(VoidCallback listener) {
+    final wasWatched = hasListeners;
+    super.addListener(listener);
+    // Opening the sheet: fetch fresh figures now and switch to the fast rate.
+    if (!wasWatched && _started && !_stopped && !_paused) {
+      _timer?.cancel();
+      _timer = null;
+      unawaited(refresh());
+    }
+  }
+
+  void _scheduleNext() {
+    _timer?.cancel();
+    _timer = null;
+    if (_stopped || _paused || !_started) return;
+    _timer = Timer(
+      hasListeners ? watchedInterval : idleInterval,
+      () => unawaited(refresh()),
+    );
   }
 
   Future<void> refresh() async {
@@ -45,7 +90,10 @@ class SessionMonitor extends ChangeNotifier {
       if (!_stopped) error = e;
     } finally {
       polling = false;
-      if (!_stopped) notifyListeners();
+      if (!_stopped) {
+        notifyListeners();
+        _scheduleNext();
+      }
     }
   }
 

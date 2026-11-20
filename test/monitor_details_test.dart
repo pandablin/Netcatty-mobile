@@ -134,6 +134,55 @@ void main() {
     sampler.dispose();
     await session.close();
   });
+
+  testWidgets('sampler polls fast only while watched and pauses in background',
+      (tester) async {
+    final session = ActiveTerminalSession(
+        id: 'adaptive',
+        host: HostProfile({'id': 'adaptive', 'label': 'adaptive'}),
+        terminal: Terminal(),
+        verifyHostKey: (_, __, ___) async => true,
+        keyboardInteractive: null);
+    final service = _InstantMonitor();
+    final sampler = SessionMonitor(session, service: service);
+    sampler.start();
+    await tester.pump();
+    expect(service.calls, 1);
+
+    // Nobody is watching: the idle rate applies.
+    await tester.pump(SessionMonitor.watchedInterval);
+    expect(service.calls, 1);
+    await tester.pump(SessionMonitor.idleInterval);
+    expect(service.calls, 2);
+
+    // Opening the sheet refreshes at once and switches to the fast rate.
+    void listener() {}
+    sampler.addListener(listener);
+    await tester.pump();
+    expect(service.calls, 3);
+    await tester.pump(SessionMonitor.watchedInterval);
+    expect(service.calls, 4);
+
+    sampler.setPaused(true);
+    await tester.pump(SessionMonitor.idleInterval * 2);
+    expect(service.calls, 4);
+    sampler.setPaused(false);
+    await tester.pump();
+    expect(service.calls, 5);
+
+    sampler.removeListener(listener);
+    sampler.dispose();
+    await session.close();
+  });
+}
+
+class _InstantMonitor extends ServerMonitorService {
+  int calls = 0;
+  @override
+  Future<ServerStats> poll(ActiveTerminalSession session) async {
+    calls++;
+    return ServerMonitorService().parse('CPU=10 5');
+  }
 }
 
 class _Monitor extends ServerMonitorService {
