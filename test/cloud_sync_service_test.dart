@@ -180,6 +180,66 @@ void main() {
     expect(await repository.loadSyncVersionCheckpoint(), isNotNull);
   });
 
+  test('Gist revision history does not count against the vault size limit',
+      () async {
+    SharedPreferences.setMockInitialValues({});
+    final repository = await VaultRepository.open();
+    await repository.saveSyncConnection(const SyncConnection(
+      type: SyncProviderType.githubGist,
+      endpoint: '',
+      username: 'octocat',
+      secret: 'token',
+      resourceId: 'gist-1',
+    ));
+    await repository.saveMasterPassword('sync-password');
+    final remoteFile = await NetcattyCrypto.encrypt(
+      vault: VaultData.empty(),
+      password: 'sync-password',
+      deviceId: 'remote-device',
+      deviceName: 'Remote',
+      appVersion: '1.3.0',
+      previousVersion: 3,
+    );
+    var files = <String, dynamic>{
+      'netcatty-vault.json': {
+        'content': jsonEncode(remoteFile.toJson()),
+        'truncated': false,
+      },
+    };
+    // Every automatic sync adds a revision; thousands of them make the API
+    // response far larger than the encrypted vault itself.
+    final history = jsonEncode([
+      for (var index = 0; index < 9000; index++)
+        {'version': '$index'.padLeft(40, '0'), 'padding': 'x' * 1000},
+    ]);
+    expect(history.length, greaterThan(9 * 1024 * 1024));
+    final client = MockClient((request) async {
+      if (request.method == 'GET') {
+        return http.Response(
+          '{"history":$history,"files":${jsonEncode(files)}}',
+          200,
+          headers: {'etag': '"revision-1"'},
+        );
+      }
+      if (request.method == 'PATCH') {
+        final body = jsonDecode(request.body) as Map<String, dynamic>;
+        files = body['files'] as Map<String, dynamic>;
+        return http.Response('{}', 200);
+      }
+      fail('Unexpected ${request.method} request to ${request.url}');
+    });
+
+    final result = await CloudSyncService(
+      repository,
+      client: client,
+      deviceId: 'local-device',
+      appVersion: '1.3.1',
+      maxResponseBytes: 8 * 1024 * 1024,
+    ).push(VaultData.empty().copyWith(customGroups: ['Added']));
+
+    expect(result.versions.cloudVersion, 5);
+  });
+
   test('Gist update verifies the revision without If-Match on PATCH', () async {
     SharedPreferences.setMockInitialValues({});
     final repository = await VaultRepository.open();

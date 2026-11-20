@@ -69,7 +69,7 @@ class CloudSyncService {
     this.repository, {
     http.Client? client,
     this.requestTimeout = const Duration(seconds: 25),
-    this.maxResponseBytes = 8 * 1024 * 1024,
+    this.maxResponseBytes = 32 * 1024 * 1024,
     String? deviceId,
     String? appVersion,
   })  : _client = client ?? http.Client(),
@@ -78,6 +78,16 @@ class CloudSyncService {
         _injectedAppVersion = appVersion;
 
   final VaultRepository repository;
+
+  /// GitHub serves a gist file through `raw_url` only up to 10 MB; larger
+  /// files can only be fetched with `git clone`.
+  static const gistRawFileLimitBytes = 10 * 1024 * 1024;
+
+  /// Sanity cap for the Gist API metadata response. It carries the revision
+  /// history (one entry per sync) and every other file in the gist, so it can
+  /// grow far beyond the vault itself and must not count against the vault
+  /// size limit.
+  static const maxGistResponseBytes = 64 * 1024 * 1024;
   final http.Client _client;
   final bool _ownsClient;
   final Duration requestTimeout;
@@ -389,16 +399,30 @@ class CloudSyncService {
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw StateError('云端读取失败 (${response.statusCode})');
     }
-    _ensureResponseSize(response);
     if (connection.type == SyncProviderType.webdav) {
+      _ensureResponseSize(response);
       return _RemoteVault(
         SyncedVaultFile.fromJson(_decodeJsonObject(response.body)),
         response.headers['etag'],
       );
     }
+    if (response.bodyBytes.length > maxGistResponseBytes) {
+      throw StateError(
+        'Gist 元数据过大（修订历史或其他文件太多），请新建一个只存放保险库的 Gist',
+      );
+    }
     final gist = jsonDecode(response.body) as Map<String, dynamic>;
     final file = (gist['files'] as Map)['netcatty-vault.json'] as Map?;
     if (file == null) return null;
+    final fileSize = (file['size'] as num?)?.toInt();
+    if (fileSize != null && fileSize > gistRawFileLimitBytes) {
+      throw StateError(
+        'Gist 中的保险库文件超过 10 MB，GitHub 无法通过 API 完整读取，请改用 WebDAV 或 S3 同步',
+      );
+    }
+    if (fileSize != null && fileSize > maxResponseBytes) {
+      throw StateError('云端保险库超过 ${maxResponseBytes ~/ (1024 * 1024)} MB 限制');
+    }
     if (file['truncated'] == true && file['raw_url'] != null) {
       final raw = await _request(_client.get(
         Uri.parse(file['raw_url'].toString()),

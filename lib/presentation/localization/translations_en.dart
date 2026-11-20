@@ -1,4 +1,6 @@
 const englishTranslations = <String, String>{
+  'Gist 元数据过大（修订历史或其他文件太多），请新建一个只存放保险库的 Gist': 'The gist metadata is too large (too many revisions or other files). Create a new gist that only holds the vault',
+  'Gist 中的保险库文件超过 10 MB，GitHub 无法通过 API 完整读取，请改用 WebDAV 或 S3 同步': 'The vault file in the gist exceeds 10 MB, which GitHub cannot serve through its API. Use WebDAV or S3 sync instead',
   '弹出键盘': 'Show keyboard',
   '点击终端弹出键盘': 'Tap terminal to show keyboard',
   '关闭后只能用工具栏右下角的键盘按钮弹出键盘；向上翻看历史时点击终端始终不会弹出键盘':
@@ -596,6 +598,8 @@ const englishTranslations = <String, String>{
 /// Ordered fragments cover dynamic values and infrastructure errors that are
 /// ultimately rendered by a localized text widget.
 const englishReplacements = <(String, String)>[
+  ('Gist 元数据过大（修订历史或其他文件太多），请新建一个只存放保险库的 Gist', 'The gist metadata is too large (too many revisions or other files). Create a new gist that only holds the vault'),
+  ('Gist 中的保险库文件超过 10 MB，GitHub 无法通过 API 完整读取，请改用 WebDAV 或 S3 同步', 'The vault file in the gist exceeds 10 MB, which GitHub cannot serve through its API. Use WebDAV or S3 sync instead'),
   (
     '暂不支持 PuTTY 私钥（.ppk），请用 PuTTYgen 导出为 OpenSSH 格式后重新导入',
     'PuTTY keys (.ppk) are not supported. Export the key in OpenSSH format with PuTTYgen and import it again'
