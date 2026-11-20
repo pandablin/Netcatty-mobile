@@ -3,6 +3,8 @@ name: Mobile CI
 on:
   push:
     branches: ['**']
+    # Pushing a vX.Y.Z tag builds everything and publishes a GitHub Release.
+    tags: ['v*']
   pull_request:
   workflow_dispatch:
 
@@ -126,3 +128,41 @@ jobs:
           path: dist/*
           if-no-files-found: error
           retention-days: 30
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [test, ios]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check tag matches pubspec version
+        shell: bash
+        run: |
+          APP_VERSION="$(awk '/^version:/ { print $2; exit }' pubspec.yaml)"
+          APP_VERSION="${APP_VERSION%%+*}"
+          if [ "v$APP_VERSION" != "$GITHUB_REF_NAME" ]; then
+            echo "Tag $GITHUB_REF_NAME does not match pubspec version $APP_VERSION" >&2
+            exit 1
+          fi
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          ls -l dist
+          NOTES="docs/releases/${GITHUB_REF_NAME}.md"
+          PRERELEASE=""
+          case "$GITHUB_REF_NAME" in *-*) PRERELEASE="--prerelease" ;; esac
+          if [ -f "$NOTES" ]; then
+            gh release create "$GITHUB_REF_NAME" dist/* $PRERELEASE \
+              --title "Netcatty Mobile ${GITHUB_REF_NAME#v}" --notes-file "$NOTES"
+          else
+            gh release create "$GITHUB_REF_NAME" dist/* $PRERELEASE \
+              --title "Netcatty Mobile ${GITHUB_REF_NAME#v}" --generate-notes
+          fi

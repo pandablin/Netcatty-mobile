@@ -43,10 +43,10 @@ class UpdateCheckService {
   /// GitHub's `latest` endpoint excludes draft and prerelease releases, so the
   /// normal update channel never advertises beta builds.
   static final latestReleaseApi = Uri.parse(
-    'https://api.github.com/repos/kmh1145/Netcatty-mobile/releases/latest',
+    'https://api.github.com/repos/wxte/Netcatty-mobile/releases/latest',
   );
   static final latestReleasePage = Uri.parse(
-    'https://github.com/kmh1145/Netcatty-mobile/releases/latest',
+    'https://github.com/wxte/Netcatty-mobile/releases/latest',
   );
 
   final http.Client _client;
