@@ -234,13 +234,38 @@ class _VaultScreenState extends ConsumerState<VaultScreen> {
     }
   }
 
+  /// True while a host details dialog or editor is opening or open. The first
+  /// tap waits for the keychain, and a second tap in that window used to
+  /// stack a second dialog on top of the first.
+  bool _hostDialogBusy = false;
+
   Future<void> _showHostDetails(HostProfile host) async {
+    if (_hostDialogBusy) return;
+    _hostDialogBusy = true;
+    final ({_HostAction action, HostProfile host})? picked;
+    try {
+      picked = await _pickHostAction(host);
+    } finally {
+      _hostDialogBusy = false;
+    }
+    if (!mounted || picked == null) return;
+    switch (picked.action) {
+      case _HostAction.edit:
+        await _editHost(picked.host);
+      case _HostAction.connect:
+        await _connect(picked.host);
+    }
+  }
+
+  Future<({_HostAction action, HostProfile host})?> _pickHostAction(
+    HostProfile host,
+  ) async {
     final vault = await ref.read(vaultControllerProvider.notifier).ready();
     host = vault.hosts.firstWhere(
       (value) => value.id == host.id,
       orElse: () => host,
     );
-    if (!mounted) return;
+    if (!mounted) return null;
     final key = vault.keys.cast<SshKeyProfile?>().firstWhere(
           (value) => value?.id == host.identityFileId,
           orElse: () => null,
@@ -334,12 +359,8 @@ class _VaultScreenState extends ConsumerState<VaultScreen> {
         ],
       ),
     );
-    if (!mounted) return;
-    if (action == _HostAction.edit) {
-      await _editHost(host);
-    } else if (action == _HostAction.connect) {
-      await _connect(host);
-    }
+    if (action == null) return null;
+    return (action: action, host: host);
   }
 
   Future<bool> _verifyHostKey(
@@ -568,6 +589,16 @@ class _VaultScreenState extends ConsumerState<VaultScreen> {
   }
 
   Future<void> _editHost([HostProfile? host]) async {
+    if (_hostDialogBusy) return;
+    _hostDialogBusy = true;
+    try {
+      await _openHostEditor(host);
+    } finally {
+      _hostDialogBusy = false;
+    }
+  }
+
+  Future<void> _openHostEditor(HostProfile? host) async {
     final vault = await ref.read(vaultControllerProvider.notifier).ready();
     var resolvedHost = host;
     if (host != null) {

@@ -31,6 +31,18 @@ class VaultController extends StateNotifier<VaultState> {
   final VaultRepository repository;
   Future<VaultData>? _activeLoad;
 
+  /// Tail of the queue of vault mutations. Each mutation reads the vault only
+  /// after the previous one has saved, so concurrent edits (an edit while the
+  /// post-connect timestamp is still being written, a double-tapped save)
+  /// can no longer overwrite each other with stale snapshots.
+  Future<void> _mutations = Future<void>.value();
+
+  Future<T> _serialized<T>(Future<T> Function() action) {
+    final result = _mutations.then((_) => action());
+    _mutations = result.then<void>((_) {}, onError: (Object _) {});
+    return result;
+  }
+
   Future<void> load() async {
     state = VaultState(data: state.data, loading: true);
     final operation = repository.loadVault();
@@ -56,12 +68,18 @@ class VaultController extends StateNotifier<VaultState> {
     return loaded;
   }
 
-  Future<void> replace(VaultData vault, {bool remote = false}) async {
+  Future<void> replace(VaultData vault, {bool remote = false}) =>
+      _serialized(() => _save(vault, remote: remote));
+
+  Future<void> _save(VaultData vault, {bool remote = false}) async {
     await repository.saveVault(vault, remote: remote);
     state = VaultState(data: vault);
   }
 
-  Future<void> upsertHost(HostProfile host) async {
+  Future<void> upsertHost(HostProfile host) =>
+      _serialized(() => _upsertHost(host));
+
+  Future<void> _upsertHost(HostProfile host) async {
     final vault = await ready();
     final stamped = HostProfile({
       ...host.data,
@@ -75,7 +93,7 @@ class VaultController extends StateNotifier<VaultState> {
     } else {
       hosts[index] = stamped;
     }
-    await replace(
+    await _save(
       vault.copyWith(
         hosts: hosts,
         customGroups: _updatedGroups(
@@ -88,14 +106,16 @@ class VaultController extends StateNotifier<VaultState> {
     );
   }
 
-  Future<void> deleteHost(String id) async {
+  Future<void> deleteHost(String id) => _serialized(() => _deleteHost(id));
+
+  Future<void> _deleteHost(String id) async {
     final vault = await ready();
     final removedHost = vault.hosts.cast<HostProfile?>().firstWhere(
           (value) => value?.id == id,
           orElse: () => null,
         );
     final hosts = vault.hosts.where((value) => value.id != id).toList();
-    await replace(
+    await _save(
       vault.copyWith(
         hosts: hosts,
         customGroups: _updatedGroups(
@@ -174,18 +194,24 @@ class VaultController extends StateNotifier<VaultState> {
     }
   }
 
-  Future<void> markConnected(HostProfile host) async {
+  Future<void> markConnected(HostProfile host) =>
+      _serialized(() => _markConnected(host.id));
+
+  Future<void> _markConnected(String hostId) async {
     final vault = await ready();
-    final connected = host.copyWith(
-      lastConnectedAt: DateTime.now().millisecondsSinceEpoch,
-    );
+    final now = DateTime.now().millisecondsSinceEpoch;
+    // Stamp the host as currently stored, not the copy captured when the
+    // connection started: the user may have edited it in the meantime, and
+    // writing the old copy back silently reverted that edit (upstream #38).
     final hosts = vault.hosts
-        .map((value) => value.id == connected.id ? connected : value)
+        .map(
+          (value) =>
+              value.id == hostId ? value.copyWith(lastConnectedAt: now) : value,
+        )
         .toList(growable: false);
     final next = vault.copyWith(hosts: hosts);
     // Connection recency is device-local telemetry in desktop Netcatty. Do
     // not schedule a cloud write just because a terminal was opened.
-    await repository.saveVault(next, remote: true);
-    state = VaultState(data: next);
+    await _save(next, remote: true);
   }
 }

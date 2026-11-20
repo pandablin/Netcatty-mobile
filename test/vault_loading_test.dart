@@ -49,12 +49,14 @@ void main() {
   test('snippet edits do not wait for or rewrite platform secrets', () async {
     const secureStorageChannel =
         MethodChannel('plugins.it_nomads.com/flutter_secure_storage');
-    final unblockReads = Completer<String?>();
+    final unblockReads = Completer<Object?>();
     var secureStorageCalls = 0;
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(secureStorageChannel, (call) async {
       secureStorageCalls++;
-      if (call.method == 'read') return unblockReads.future;
+      if (call.method == 'read' || call.method == 'readAll') {
+        return unblockReads.future;
+      }
       return null;
     });
     addTearDown(() {
@@ -91,8 +93,12 @@ void main() {
         .timeout(const Duration(milliseconds: 500));
 
     expect(controller.state.data?.snippets.single.id, 'snippet-fast');
-    expect(secureStorageCalls, 3, reason: 'only the active hydration may read');
-    unblockReads.complete(null);
+    expect(
+      secureStorageCalls,
+      1,
+      reason: 'only the active hydration may read, in one batched call',
+    );
+    unblockReads.complete(<String, String>{});
     await loading;
     expect(controller.state.data?.snippets.single.id, 'snippet-fast');
     expect(repository.loadVaultPreview()?.snippets.single.id, 'snippet-fast');
@@ -169,5 +175,101 @@ void main() {
 
     expect(controller.state.data!.hosts, isEmpty);
     expect(controller.state.data!.customGroups, isEmpty);
+  });
+
+  test('host edits only touch keychain entries that changed', () async {
+    const secureStorageChannel =
+        MethodChannel('plugins.it_nomads.com/flutter_secure_storage');
+    final calls = <String>[];
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(secureStorageChannel, (call) async {
+      calls.add(call.method);
+      if (call.method == 'readAll') {
+        return <String, String>{
+          'host.host-1.password': 'secret-1',
+          'host.host-2.password': 'secret-2',
+        };
+      }
+      return null;
+    });
+    addTearDown(() {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(secureStorageChannel, null);
+    });
+    SharedPreferences.setMockInitialValues({
+      'netcatty_mobile_vault_v1': jsonEncode({
+        'hosts': [
+          for (final id in ['host-1', 'host-2'])
+            {
+              'id': id,
+              'label': id,
+              'hostname': '192.0.2.10',
+              'username': 'root',
+            },
+        ],
+        'keys': const [],
+        'snippets': const [],
+        'customGroups': const [],
+      }),
+    });
+    final repository = await VaultRepository.open();
+    final controller = VaultController(repository);
+    await controller.load();
+    expect(calls, ['readAll']);
+    expect(controller.state.data!.hosts.first.password, 'secret-1');
+
+    calls.clear();
+    final host = controller.state.data!.hosts.first;
+    await controller.upsertHost(host.copyWith(label: 'Renamed'));
+    expect(calls, isEmpty, reason: 'no secret changed');
+
+    await controller.upsertHost(
+      HostProfile({...host.data, 'password': 'secret-new'}),
+    );
+    expect(calls, ['write']);
+  });
+
+  test('a late connection timestamp does not revert a host edit', () async {
+    const secureStorageChannel =
+        MethodChannel('plugins.it_nomads.com/flutter_secure_storage');
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(secureStorageChannel, (_) async => null);
+    addTearDown(() {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(secureStorageChannel, null);
+    });
+    SharedPreferences.setMockInitialValues({
+      'netcatty_mobile_vault_v1': jsonEncode({
+        'hosts': [
+          {
+            'id': 'host-1',
+            'label': 'Before edit',
+            'hostname': '192.0.2.10',
+            'username': 'root',
+            'proxyConfig': {'type': 'http', 'host': '127.0.0.1', 'port': 8080},
+          },
+        ],
+        'keys': const [],
+        'snippets': const [],
+        'customGroups': const [],
+      }),
+    });
+    final repository = await VaultRepository.open();
+    final controller = VaultController(repository);
+    await controller.load();
+    final connectedCopy = controller.state.data!.hosts.single;
+
+    final edited = HostProfile({...connectedCopy.data, 'label': 'After edit'})
+      ..data.remove('proxyConfig');
+    await Future.wait([
+      controller.upsertHost(edited),
+      controller.markConnected(connectedCopy),
+    ]);
+
+    final stored = repository.loadVaultPreview()!.hosts.single;
+    expect(stored.label, 'After edit');
+    expect(stored.proxyConfig, isNull);
+    expect(stored.data['lastConnectedAt'], isNotNull);
+    expect(controller.state.data!.hosts.single.label, 'After edit');
   });
 }

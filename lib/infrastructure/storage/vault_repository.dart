@@ -57,6 +57,18 @@ class VaultRepository {
   Future<VaultData>? _vaultLoad;
   bool _vaultSecretsLoaded = false;
 
+  /// Keychain contents of vault secrets (host./key./proxy. entries) as last
+  /// read or written, or null while unknown. saveVault() uses it to skip
+  /// unchanged values: it used to rewrite every secret of every host on each
+  /// edit, hundreds of sequential keychain calls that made saves slow enough
+  /// for a second edit to start from stale data and overwrite the first.
+  Map<String, String>? _persistedSecrets;
+
+  static bool _isVaultSecretKey(String key) =>
+      key.startsWith('host.') ||
+      key.startsWith('key.') ||
+      key.startsWith('proxy.');
+
   static Future<VaultRepository> open({
     BackgroundImageService? backgroundImageService,
   }) async {
@@ -115,10 +127,18 @@ class VaultRepository {
 
   Future<VaultData> _loadVaultWithSecrets() async {
     final vault = _cachedVault ?? _readStoredVault();
+    // One batched keychain query instead of one platform call per secret,
+    // which made the first host tap noticeably slow on iOS.
+    final all = await _readAllVaultSecrets();
+    Future<String?> read(String key) {
+      if (all != null) return Future.value(all[key]);
+      return _secureStorage.read(key: key);
+    }
+
     await Future.wait([
-      ...vault.hosts.map(_loadHostSecrets),
-      ...vault.keys.map(_loadKeySecrets),
-      ...vault.proxyProfiles.map(_loadProxySecrets),
+      ...vault.hosts.map((host) => _loadHostSecrets(host, read)),
+      ...vault.keys.map((key) => _loadKeySecrets(key, read)),
+      ...vault.proxyProfiles.map((profile) => _loadProxySecrets(profile, read)),
     ]);
     // A metadata-only edit (for example a snippet mutation) may complete while
     // platform keychain reads are still in flight. Keep that newer snapshot;
@@ -130,17 +150,30 @@ class VaultRepository {
     return result;
   }
 
-  Future<void> _loadHostSecrets(HostProfile host) async {
+  Future<Map<String, String>?> _readAllVaultSecrets() async {
+    try {
+      final all = await _secureStorage.readAll();
+      final secrets = <String, String>{
+        for (final entry in all.entries)
+          if (_isVaultSecretKey(entry.key)) entry.key: entry.value,
+      };
+      _persistedSecrets = Map.of(secrets);
+      return secrets;
+    } on Object {
+      // Fall back to per-item reads; saves then write through as before.
+      _persistedSecrets = null;
+      return null;
+    }
+  }
+
+  Future<void> _loadHostSecrets(
+    HostProfile host,
+    Future<String?> Function(String key) read,
+  ) async {
     final values = await Future.wait([
-      _secureStorage.read(
-        key: 'host.${host.id}.password',
-      ),
-      _secureStorage.read(
-        key: 'host.${host.id}.telnetPassword',
-      ),
-      _secureStorage.read(
-        key: 'host.${host.id}.proxyPassword',
-      ),
+      read('host.${host.id}.password'),
+      read('host.${host.id}.telnetPassword'),
+      read('host.${host.id}.proxyPassword'),
     ]);
     final password = values[0];
     final telnet = values[1];
@@ -155,14 +188,13 @@ class VaultRepository {
     }
   }
 
-  Future<void> _loadKeySecrets(SshKeyProfile key) async {
+  Future<void> _loadKeySecrets(
+    SshKeyProfile key,
+    Future<String?> Function(String key) read,
+  ) async {
     final values = await Future.wait([
-      _secureStorage.read(
-        key: 'key.${key.id}.private',
-      ),
-      _secureStorage.read(
-        key: 'key.${key.id}.passphrase',
-      ),
+      read('key.${key.id}.private'),
+      read('key.${key.id}.passphrase'),
     ]);
     final privateKey = values[0];
     final passphrase = values[1];
@@ -170,10 +202,11 @@ class VaultRepository {
     if (passphrase != null) key.data['passphrase'] = passphrase;
   }
 
-  Future<void> _loadProxySecrets(ProxyProfile profile) async {
-    final password = await _secureStorage.read(
-      key: 'proxy.${profile.id}.password',
-    );
+  Future<void> _loadProxySecrets(
+    ProxyProfile profile,
+    Future<String?> Function(String key) read,
+  ) async {
+    final password = await read('proxy.${profile.id}.password');
     if (password != null && profile.data['config'] is Map) {
       profile.data['config'] = {
         ...Map<String, dynamic>.from(profile.data['config'] as Map),
@@ -196,20 +229,20 @@ class VaultRepository {
       for (final host in previous.hosts.where(
         (value) => !hostIds.contains(value.id),
       )) {
-        await _secureStorage.delete(key: 'host.${host.id}.password');
-        await _secureStorage.delete(key: 'host.${host.id}.telnetPassword');
-        await _secureStorage.delete(key: 'host.${host.id}.proxyPassword');
+        await _writeSecret('host.${host.id}.password', null);
+        await _writeSecret('host.${host.id}.telnetPassword', null);
+        await _writeSecret('host.${host.id}.proxyPassword', null);
       }
       for (final proxy in previous.proxyProfiles.where(
         (value) => !proxyIds.contains(value.id),
       )) {
-        await _secureStorage.delete(key: 'proxy.${proxy.id}.password');
+        await _writeSecret('proxy.${proxy.id}.password', null);
       }
       for (final key in previous.keys.where(
         (value) => !keyIds.contains(value.id),
       )) {
-        await _secureStorage.delete(key: 'key.${key.id}.private');
-        await _secureStorage.delete(key: 'key.${key.id}.passphrase');
+        await _writeSecret('key.${key.id}.private', null);
+        await _writeSecret('key.${key.id}.passphrase', null);
       }
     }
     for (final host in vault.hosts) {
@@ -406,10 +439,16 @@ class VaultRepository {
   }
 
   Future<void> _writeSecret(String key, String? value) async {
-    if (value == null || value.isEmpty) {
+    final next = value == null || value.isEmpty ? null : value;
+    final known = _isVaultSecretKey(key) ? _persistedSecrets : null;
+    // A missing entry in a known snapshot means "not in the keychain".
+    if (known != null && known[key] == next) return;
+    if (next == null) {
       await _secureStorage.delete(key: key);
+      known?.remove(key);
     } else {
-      await _secureStorage.write(key: key, value: value);
+      await _secureStorage.write(key: key, value: next);
+      known?[key] = next;
     }
   }
 }
