@@ -1,0 +1,40 @@
+name: Auto format
+
+# Fork helper: formats Dart code on feature branches and commits the result,
+# so changes authored without a local Flutter SDK still pass `dart format`
+# in Mobile CI. Never runs on main.
+on:
+  push:
+    branches-ignore: [main]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: autoformat-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    if: github.actor != 'github-actions[bot]'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.44.4
+          cache: true
+      - run: flutter pub get
+      - run: dart format lib test
+      - name: Commit formatting changes
+        shell: bash
+        run: |
+          if git diff --quiet; then
+            echo "Already formatted"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "style: dart format"
+          git push

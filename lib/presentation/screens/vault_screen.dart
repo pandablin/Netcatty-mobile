@@ -216,13 +216,16 @@ class _VaultScreenState extends ConsumerState<VaultScreen> {
             host,
             _verifyHostKey,
             keyboardInteractive: _promptKeyboardInteractive,
+            requestPassphrase: _promptKeyPassphrase,
           );
+      await _savePendingPassphrases();
       if (mounted) {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: LText('${host.label} 已连接')));
       }
     } catch (error) {
+      _passphrasesToSave.clear();
       if (mounted) {
         ScaffoldMessenger.of(
           context,
@@ -452,6 +455,111 @@ class _VaultScreenState extends ConsumerState<VaultScreen> {
             ),
             child: const LText('继续'),
           ),
+        ],
+      ),
+    );
+  }
+
+  /// Passphrases the user asked to remember. They are written to the vault
+  /// only after the connection succeeded, so a mistyped one is never saved.
+  final _passphrasesToSave = <String, String>{};
+
+  Future<String?> _promptKeyPassphrase(
+    SshKeyProfile key, {
+    required bool retry,
+  }) async {
+    if (!mounted) return null;
+    final controller = TextEditingController();
+    var remember = true;
+    var obscure = true;
+    final value = await showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          icon: const Icon(Icons.key_outlined),
+          title: const LText('输入私钥口令'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              LText(key.label),
+              if (retry) ...[
+                const SizedBox(height: 6),
+                LText(
+                  '口令不正确，请重试',
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                ),
+              ],
+              const SizedBox(height: 12),
+              TextField(
+                controller: controller,
+                obscureText: obscure,
+                autofocus: true,
+                autocorrect: false,
+                enableSuggestions: false,
+                onSubmitted: (text) => Navigator.pop(context, text),
+                decoration: LInputDecoration(
+                  labelText: '口令',
+                  suffixIcon: IconButton(
+                    icon: Icon(
+                      obscure ? Icons.visibility_outlined : Icons.visibility_off,
+                    ),
+                    onPressed: () => setDialogState(() => obscure = !obscure),
+                  ),
+                ),
+              ),
+              CheckboxListTile(
+                contentPadding: EdgeInsets.zero,
+                controlAffinity: ListTileControlAffinity.leading,
+                value: remember,
+                onChanged: (next) =>
+                    setDialogState(() => remember = next ?? false),
+                title: const LText('保存口令到系统钥匙串'),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const LText('取消'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, controller.text),
+              child: const LText('解锁'),
+            ),
+          ],
+        ),
+      ),
+    );
+    controller.dispose();
+    if (value == null || value.isEmpty) return null;
+    if (remember) {
+      _passphrasesToSave[key.id] = value;
+    } else {
+      _passphrasesToSave.remove(key.id);
+    }
+    return value;
+  }
+
+  Future<void> _savePendingPassphrases() async {
+    if (_passphrasesToSave.isEmpty) return;
+    final pending = Map<String, String>.of(_passphrasesToSave);
+    _passphrasesToSave.clear();
+    final controller = ref.read(vaultControllerProvider.notifier);
+    final vault = await controller.ready();
+    await controller.replace(
+      vault.copyWith(
+        keys: [
+          for (final key in vault.keys)
+            if (pending.containsKey(key.id))
+              SshKeyProfile({
+                ...key.data,
+                'passphrase': pending[key.id],
+                'savePassphrase': true,
+              })
+            else
+              key,
         ],
       ),
     );

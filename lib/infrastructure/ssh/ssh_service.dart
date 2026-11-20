@@ -12,6 +12,8 @@ import 'server_monitor_service.dart';
 import 'ssh_identity.dart';
 import 'terminal_input_filter.dart';
 
+export 'ssh_identity.dart' show KeyPassphraseHandler, SshKeyException;
+
 typedef HostKeyVerifier = Future<bool> Function(
   HostProfile host,
   String algorithm,
@@ -142,6 +144,10 @@ class ActiveTerminalSession {
 class SshService {
   final _pendingConnections = <String, _PendingConnection>{};
 
+  /// Key passphrases typed during this app session, by key id. Memory only:
+  /// lets reconnects, managed terminals and new tabs reuse an unlocked key.
+  final _keyPassphrases = <String, String>{};
+
   void cancelConnection(String sessionId) {
     _pendingConnections[sessionId]?.cancel();
   }
@@ -154,6 +160,7 @@ class SshService {
     required List<ProxyProfile> proxyProfiles,
     required HostKeyVerifier verifyHostKey,
     KeyboardInteractiveHandler? keyboardInteractive,
+    KeyPassphraseHandler? requestPassphrase,
     Terminal? terminal,
   }) async {
     _pendingConnections.remove(sessionId)?.cancel();
@@ -176,6 +183,23 @@ class SshService {
 
       final chain = _resolveHostChain(host, hosts);
       final route = [...chain, host];
+      // Unlock keys before opening any socket: a passphrase prompt must not
+      // race the server's authentication timeout.
+      final identities = <List<SSHKeyPair>?>[];
+      for (final current in route) {
+        identities.add(
+          current.authMethod == HostAuthMethod.password
+              ? null
+              : await pending.waitFor(
+                  loadHostIdentities(
+                    current,
+                    keys,
+                    requestPassphrase: requestPassphrase,
+                    passphraseCache: _keyPassphrases,
+                  ),
+                ),
+        );
+      }
       final clients = <SSHClient>[];
       SSHSocket? transport;
       try {
@@ -196,7 +220,7 @@ class SshService {
           final client = _createClient(
             activeTransport,
             current,
-            keys,
+            identities[index],
             verifyHostKey,
             keyboardInteractive,
           );
@@ -268,11 +292,10 @@ class SshService {
   SSHClient _createClient(
     SSHSocket socket,
     HostProfile host,
-    List<SshKeyProfile> keys,
+    List<SSHKeyPair>? identities,
     HostKeyVerifier verifyHostKey,
     KeyboardInteractiveHandler? keyboardInteractive,
   ) {
-    final identities = buildHostIdentities(host, keys);
     return SSHClient(
       socket,
       username: host.username,

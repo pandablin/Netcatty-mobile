@@ -123,6 +123,7 @@ class SessionController extends StateNotifier<SessionState> {
     HostProfile host,
     HostKeyVerifier verifyHostKey, {
     KeyboardInteractiveHandler? keyboardInteractive,
+    KeyPassphraseHandler? requestPassphrase,
   }) async {
     final sessionId = const Uuid().v4();
     final pending = PendingTerminalConnection(id: sessionId, host: host);
@@ -147,6 +148,7 @@ class SessionController extends StateNotifier<SessionState> {
         proxyProfiles: vault.proxyProfiles,
         verifyHostKey: verifyHostKey,
         keyboardInteractive: keyboardInteractive,
+        requestPassphrase: requestPassphrase,
       );
       if (_cancelledConnectionIds.remove(sessionId)) {
         await session.close();

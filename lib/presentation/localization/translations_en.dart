@@ -1,4 +1,21 @@
 const englishTranslations = <String, String>{
+  '输入私钥口令': 'Enter key passphrase',
+  '口令不正确，请重试': 'Incorrect passphrase. Try again.',
+  '口令': 'Passphrase',
+  '保存口令到系统钥匙串': 'Save passphrase to the system keychain',
+  '解锁': 'Unlock',
+  '暂不支持 PuTTY 私钥（.ppk），请用 PuTTYgen 导出为 OpenSSH 格式后重新导入': 'PuTTY keys (.ppk) are not supported. Export the key in OpenSSH format with PuTTYgen and import it again',
+  '暂不支持 PKCS#8 私钥，请执行 ssh-keygen -p -f <私钥文件> 转换为 OpenSSH 格式后重新导入': 'PKCS#8 keys are not supported. Run ssh-keygen -p -f <key file> to convert it to OpenSSH format, then import it again',
+  '私钥内容无法识别，请重新导入私钥文件': 'The private key could not be read. Import the key file again',
+  '该私钥已加密，请在密钥设置中填写口令': 'This private key is encrypted. Enter its passphrase in the key settings',
+  '已取消输入私钥口令': 'Passphrase entry cancelled',
+  '私钥口令错误次数过多': 'Too many incorrect passphrase attempts',
+  '目标主机名无效或过长': 'Target hostname is empty or too long',
+  '私钥格式无法识别：': 'Unrecognised private key format: ',
+  '私钥解析失败：': 'Failed to parse private key: ',
+  r'私钥格式无法识别：$error': r'Unrecognised private key format: $error',
+  r'私钥解析失败：$error': r'Failed to parse private key: $error',
+  r'私钥解析失败：${result.error}': r'Failed to parse private key: ${result.error}',
   '打开': 'Open',
   '完成': 'Done',
   '切换': 'Switch',
@@ -571,6 +588,15 @@ const englishTranslations = <String, String>{
 /// Ordered fragments cover dynamic values and infrastructure errors that are
 /// ultimately rendered by a localized text widget.
 const englishReplacements = <(String, String)>[
+  ('暂不支持 PuTTY 私钥（.ppk），请用 PuTTYgen 导出为 OpenSSH 格式后重新导入', 'PuTTY keys (.ppk) are not supported. Export the key in OpenSSH format with PuTTYgen and import it again'),
+  ('暂不支持 PKCS#8 私钥，请执行 ssh-keygen -p -f <私钥文件> 转换为 OpenSSH 格式后重新导入', 'PKCS#8 keys are not supported. Run ssh-keygen -p -f <key file> to convert it to OpenSSH format, then import it again'),
+  ('私钥内容无法识别，请重新导入私钥文件', 'The private key could not be read. Import the key file again'),
+  ('该私钥已加密，请在密钥设置中填写口令', 'This private key is encrypted. Enter its passphrase in the key settings'),
+  ('已取消输入私钥口令', 'Passphrase entry cancelled'),
+  ('私钥口令错误次数过多', 'Too many incorrect passphrase attempts'),
+  ('目标主机名无效或过长', 'Target hostname is empty or too long'),
+  ('私钥格式无法识别：', 'Unrecognised private key format: '),
+  ('私钥解析失败：', 'Failed to parse private key: '),
   ('打开链接？', 'Open link?'),
   ('无法打开链接', 'Unable to open link'),
   (
