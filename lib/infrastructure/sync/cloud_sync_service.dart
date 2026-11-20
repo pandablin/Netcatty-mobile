@@ -79,10 +79,6 @@ class CloudSyncService {
 
   final VaultRepository repository;
 
-  /// GitHub serves a gist file through `raw_url` only up to 10 MB; larger
-  /// files can only be fetched with `git clone`.
-  static const gistRawFileLimitBytes = 10 * 1024 * 1024;
-
   /// Sanity cap for the Gist API metadata response. It carries the revision
   /// history (one entry per sync) and every other file in the gist, so it can
   /// grow far beyond the vault itself and must not count against the vault
@@ -415,11 +411,6 @@ class CloudSyncService {
     final file = (gist['files'] as Map)['netcatty-vault.json'] as Map?;
     if (file == null) return null;
     final fileSize = (file['size'] as num?)?.toInt();
-    if (fileSize != null && fileSize > gistRawFileLimitBytes) {
-      throw StateError(
-        'Gist 中的保险库文件超过 10 MB，GitHub 无法通过 API 完整读取，请改用 WebDAV 或 S3 同步',
-      );
-    }
     if (fileSize != null && fileSize > maxResponseBytes) {
       throw StateError('云端保险库超过 ${maxResponseBytes ~/ (1024 * 1024)} MB 限制');
     }
