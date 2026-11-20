@@ -503,7 +503,9 @@ class _VaultScreenState extends ConsumerState<VaultScreen> {
                   labelText: '口令',
                   suffixIcon: IconButton(
                     icon: Icon(
-                      obscure ? Icons.visibility_outlined : Icons.visibility_off,
+                      obscure
+                          ? Icons.visibility_outlined
+                          : Icons.visibility_off,
                     ),
                     onPressed: () => setDialogState(() => obscure = !obscure),
                   ),

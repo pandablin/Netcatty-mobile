@@ -75,11 +75,7 @@ String normalizePrivateKeyText(String text) {
     value = value.replaceAll(r'\r\n', '\n').replaceAll(r'\n', '\n');
   }
   value = value.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
-  return value
-      .split('\n')
-      .map((line) => line.trim())
-      .join('\n')
-      .trim();
+  return value.split('\n').map((line) => line.trim()).join('\n').trim();
 }
 
 /// Rejects key formats dartssh2 cannot read with a message that says how to

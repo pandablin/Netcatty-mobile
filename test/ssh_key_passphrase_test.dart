@@ -47,7 +47,8 @@ HostProfile _host() => HostProfile({
 void main() {
   group('normalizePrivateKeyText', () {
     test('normalises CRLF, BOM, indentation and literal escapes', () {
-      const body = '-----BEGIN RSA PRIVATE KEY-----\nAAAA\n-----END RSA PRIVATE KEY-----';
+      const body =
+          '-----BEGIN RSA PRIVATE KEY-----\nAAAA\n-----END RSA PRIVATE KEY-----';
       expect(
         normalizePrivateKeyText(
           '\uFEFF  -----BEGIN RSA PRIVATE KEY-----\r\n  AAAA\r\n-----END RSA PRIVATE KEY-----\r\n',
@@ -68,7 +69,9 @@ void main() {
       var prompts = 0;
       final identities = await loadHostIdentities(
         _host(),
-        [_key({'passphrase': testPassphrase})],
+        [
+          _key({'passphrase': testPassphrase})
+        ],
         requestPassphrase: (_, {required retry}) async {
           prompts++;
           return null;
@@ -109,7 +112,9 @@ void main() {
       final retries = <bool>[];
       final identities = await loadHostIdentities(
         _host(),
-        [_key({'passphrase': 'wrong'})],
+        [
+          _key({'passphrase': 'wrong'})
+        ],
         requestPassphrase: (_, {required retry}) async {
           retries.add(retry);
           return testPassphrase;
