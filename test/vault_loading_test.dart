@@ -303,8 +303,7 @@ void main() {
     final controller = VaultController(repository);
     await controller.load();
     var localChanges = 0;
-    final subscription =
-        repository.localChanges.listen((_) => localChanges++);
+    final subscription = repository.localChanges.listen((_) => localChanges++);
     addTearDown(subscription.cancel);
 
     const fields = {'os': 'linux', 'distro': 'debian'};
