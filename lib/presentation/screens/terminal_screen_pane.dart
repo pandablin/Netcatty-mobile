@@ -293,8 +293,7 @@ class _TerminalPaneState extends State<_TerminalPane> {
     super.dispose();
   }
 
-  void _onFocusChanged() =>
-      widget.keyboard?.report(this, _focusNode.hasFocus);
+  void _onFocusChanged() => widget.keyboard?.report(this, _focusNode.hasFocus);
 
   bool get _scrolledToBottom {
     if (!_scrollController.hasClients) return true;

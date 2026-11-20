@@ -58,14 +58,16 @@ void main() {
     );
 
     expect(find.byTooltip('弹出键盘'), findsOneWidget);
-    await tester.tap(find.byKey(const ValueKey('terminal-action-hide-keyboard')));
+    await tester
+        .tap(find.byKey(const ValueKey('terminal-action-hide-keyboard')));
     await tester.pump();
     expect(shows, 1);
 
     open.value = true;
     await tester.pump();
     expect(find.byTooltip('收起键盘'), findsOneWidget);
-    await tester.tap(find.byKey(const ValueKey('terminal-action-hide-keyboard')));
+    await tester
+        .tap(find.byKey(const ValueKey('terminal-action-hide-keyboard')));
     await tester.pump();
     expect(shows, 1, reason: 'an open keyboard is hidden, not shown again');
   });

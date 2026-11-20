@@ -619,9 +619,8 @@ class TelnetStreamFilter {
         case _TelnetState.subnegotiation:
           if (byte == _iac) _state = _TelnetState.subnegotiationIac;
         case _TelnetState.subnegotiationIac:
-          _state = byte == _se
-              ? _TelnetState.data
-              : _TelnetState.subnegotiation;
+          _state =
+              byte == _se ? _TelnetState.data : _TelnetState.subnegotiation;
       }
     }
     return visible;

@@ -9,9 +9,8 @@ void main() {
   test('stream decoding keeps a CJK character split across packets', () async {
     final bytes = utf8.encode('中文');
     final packets = StreamController<Uint8List>();
-    final text = const Utf8Decoder(allowMalformed: true)
-        .bind(packets.stream)
-        .join();
+    final text =
+        const Utf8Decoder(allowMalformed: true).bind(packets.stream).join();
     // Split inside the first character's three bytes.
     packets
       ..add(Uint8List.fromList(bytes.sublist(0, 2)))
