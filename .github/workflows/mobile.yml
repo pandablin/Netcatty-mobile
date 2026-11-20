@@ -2,8 +2,9 @@ name: Mobile CI
 
 on:
   push:
-    branches: [main]
+    branches: ['**']
   pull_request:
+  workflow_dispatch:
 
 jobs:
   test:
@@ -38,8 +39,10 @@ jobs:
         shell: bash
         run: |
           if [ -z "$ANDROID_KEYSTORE_BASE64" ] || [ -z "$ANDROID_KEYSTORE_PASSWORD" ] || [ -z "$ANDROID_KEY_PASSWORD" ]; then
-            echo "Persistent Android signing secrets are not configured" >&2
-            exit 1
+            # Forks have no access to the upstream keystore. Fall back to the
+            # debug key (see android/app/build.gradle.kts) instead of failing.
+            echo "::warning::Android signing secrets are not configured; APKs will be debug-signed"
+            exit 0
           fi
           printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > android/app/netcatty-release.jks
       - name: Build Android release APKs
