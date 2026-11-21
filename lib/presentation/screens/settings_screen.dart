@@ -407,7 +407,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         value: ref
                             .watch(settingsControllerProvider)
                             .terminalImeSuggestions,
-                        onChanged: ref.watch(settingsControllerProvider)
+                        onChanged: ref
+                                .watch(settingsControllerProvider)
                                 .terminalSecureKeyboard
                             ? null
                             : (value) => ref
