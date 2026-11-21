@@ -13,8 +13,7 @@ final settingsControllerProvider =
 });
 
 class SettingsController extends StateNotifier<AppSettings> {
-  SettingsController(this.repository)
-      : super(repository.loadSettingsPreview());
+  SettingsController(this.repository) : super(repository.loadSettingsPreview());
   final VaultRepository repository;
 
   Future<void> load() async => state = await repository.loadSettings();
