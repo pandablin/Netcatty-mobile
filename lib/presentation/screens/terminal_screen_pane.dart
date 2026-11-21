@@ -481,28 +481,28 @@ class _TerminalPaneState extends State<_TerminalPane> {
         child: RepaintBoundary(
           child: _SettledHeight(
             child: TerminalView(
-            widget.session.terminal,
-            simulateScroll: false,
-            key: _terminalViewKey,
-            controller: _controller,
-            scrollController: _scrollController,
-            theme: theme,
-            backgroundOpacity: widget.transparentBackground ? 0 : 1,
-            keyboardAppearance: Theme.of(context).brightness,
-            keyboardType: widget.secureKeyboard
-                ? TextInputType.visiblePassword
-                // The email type made keyboards offer "@qq.com"-style
-                // completions; plain text gives ordinary word suggestions.
-                : widget.imeSuggestions
-                    ? TextInputType.text
-                    : TextInputType.emailAddress,
-            keepImeContext: widget.imeSuggestions && !widget.secureKeyboard,
-            deleteDetection: true,
-            focusNode: _focusNode,
-            autofocus: !widget.pictureInPicture && widget.tapToKeyboard,
-            padding: const EdgeInsets.all(8),
-            textStyle: TerminalStyle(
-                fontSize: widget.fontSize, fontFamily: 'monospace'),
+              widget.session.terminal,
+              simulateScroll: false,
+              key: _terminalViewKey,
+              controller: _controller,
+              scrollController: _scrollController,
+              theme: theme,
+              backgroundOpacity: widget.transparentBackground ? 0 : 1,
+              keyboardAppearance: Theme.of(context).brightness,
+              keyboardType: widget.secureKeyboard
+                  ? TextInputType.visiblePassword
+                  // The email type made keyboards offer "@qq.com"-style
+                  // completions; plain text gives ordinary word suggestions.
+                  : widget.imeSuggestions
+                      ? TextInputType.text
+                      : TextInputType.emailAddress,
+              keepImeContext: widget.imeSuggestions && !widget.secureKeyboard,
+              deleteDetection: true,
+              focusNode: _focusNode,
+              autofocus: !widget.pictureInPicture && widget.tapToKeyboard,
+              padding: const EdgeInsets.all(8),
+              textStyle: TerminalStyle(
+                  fontSize: widget.fontSize, fontFamily: 'monospace'),
             ),
           ),
         ),
