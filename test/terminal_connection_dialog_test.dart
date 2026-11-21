@@ -522,10 +522,13 @@ void main() {
     await tester.pump();
 
     final normalView = find.byType(TerminalView);
+    // Keyboard suggestions are on by default: plain text keyboard (no
+    // email-style completions) that keeps the typed word.
     expect(
       tester.widget<TerminalView>(normalView).keyboardType,
-      TextInputType.emailAddress,
+      TextInputType.text,
     );
+    expect(tester.widget<TerminalView>(normalView).keepImeContext, isTrue);
     expect(tester.widget<TerminalView>(normalView).backgroundOpacity, 1);
     expect(
       tester
