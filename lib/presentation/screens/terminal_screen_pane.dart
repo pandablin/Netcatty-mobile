@@ -479,7 +479,8 @@ class _TerminalPaneState extends State<_TerminalPane> {
         onPointerUp: (_) => _copyHoldTimer?.cancel(),
         onPointerCancel: (_) => _copyHoldTimer?.cancel(),
         child: RepaintBoundary(
-          child: TerminalView(
+          child: _SettledHeight(
+            child: TerminalView(
             widget.session.terminal,
             simulateScroll: false,
             key: _terminalViewKey,
@@ -502,6 +503,7 @@ class _TerminalPaneState extends State<_TerminalPane> {
             padding: const EdgeInsets.all(8),
             textStyle: TerminalStyle(
                 fontSize: widget.fontSize, fontFamily: 'monospace'),
+            ),
           ),
         ),
       );
@@ -747,4 +749,76 @@ class _TerminalSelectionHandlePainter extends CustomPainter {
   @override
   bool shouldRepaint(_TerminalSelectionHandlePainter oldDelegate) =>
       oldDelegate.color != color;
+}
+
+/// Gives its child a height that only follows the available height once that
+/// has settled. While the keyboard slides in, the available height changes on
+/// nearly every frame; passing each value on made the terminal reflow,
+/// re-scroll and send a new size to the server many times in a row, so the
+/// text jumped up and down. The child is clipped (or shows empty space at the
+/// bottom) for the short time until the height settles.
+class _SettledHeight extends StatefulWidget {
+  const _SettledHeight({required this.child});
+
+  final Widget child;
+
+  @override
+  State<_SettledHeight> createState() => _SettledHeightState();
+}
+
+class _SettledHeightState extends State<_SettledHeight> {
+  static const _settleDelay = Duration(milliseconds: 140);
+
+  double? _height;
+  double? _pending;
+  Timer? _timer;
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  void _track(double available) {
+    final current = _height;
+    if (current == null) {
+      _height = available;
+      return;
+    }
+    if ((available - current).abs() < 0.5) {
+      _timer?.cancel();
+      _pending = null;
+      return;
+    }
+    if (_pending == available) return;
+    _pending = available;
+    _timer?.cancel();
+    _timer = Timer(_settleDelay, () {
+      if (!mounted) return;
+      setState(() {
+        _height = _pending ?? _height;
+        _pending = null;
+      });
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final available = constraints.maxHeight;
+        if (!available.isFinite) return widget.child;
+        _track(available);
+        final height = _height!;
+        return ClipRect(
+          child: OverflowBox(
+            alignment: Alignment.topCenter,
+            minHeight: height,
+            maxHeight: height,
+            child: widget.child,
+          ),
+        );
+      },
+    );
+  }
 }

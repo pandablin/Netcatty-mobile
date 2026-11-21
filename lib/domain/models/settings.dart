@@ -58,7 +58,7 @@ class AppSettings {
     this.terminalFontSize = 14,
     this.terminalSecureKeyboard = false,
     this.terminalTapToKeyboard = true,
-    this.terminalImeSuggestions = false,
+    this.terminalImeSuggestions = true,
     this.sftpSyntaxHighlight = true,
     this.customBackgroundEnabled = false,
     this.customBackgroundPath = '',
@@ -115,7 +115,7 @@ class AppSettings {
           .toDouble(),
       terminalSecureKeyboard: json['terminalSecureKeyboard'] == true,
       terminalTapToKeyboard: json['terminalTapToKeyboard'] != false,
-      terminalImeSuggestions: json['terminalImeSuggestions'] == true,
+      terminalImeSuggestions: json['terminalImeSuggestions'] != false,
       sftpSyntaxHighlight: json['sftpSyntaxHighlight'] != false,
       customBackgroundEnabled: json['customBackgroundEnabled'] == true,
       customBackgroundPath: json['customBackgroundPath']?.toString() ?? '',
@@ -154,8 +154,9 @@ class AppSettings {
   /// toolbar keyboard button does (upstream #36).
   final bool terminalTapToKeyboard;
 
-  /// Experimental: keep the typed word in the keyboard's text field so input
-  /// methods show stable suggestions instead of flickering. Off by default.
+  /// Keep the typed word in the keyboard's text field so input methods show
+  /// stable suggestions instead of flickering. Turning it off restores the
+  /// upstream xterm behaviour (reset after every key).
   final bool terminalImeSuggestions;
   final bool sftpSyntaxHighlight;
   final bool customBackgroundEnabled;

@@ -400,9 +400,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       SwitchListTile(
                         key: const ValueKey('terminal-ime-suggestions'),
                         contentPadding: EdgeInsets.zero,
-                        title: const LText('显示输入法联想词（实验）'),
+                        title: const LText('显示输入法联想词'),
                         subtitle: const LText(
-                          '打字时输入法候选栏保持稳定、可显示联想词。若发现按键或删除后发送了未输入的内容，请关闭此项',
+                          '打字时输入法候选栏保持稳定、可选择联想词。关闭后每个按键都会清空输入框，候选栏会闪烁、无法选词',
                         ),
                         value: ref
                             .watch(settingsControllerProvider)
