@@ -318,6 +318,20 @@ class VaultRepository {
     return sanitized;
   }
 
+  /// Stored settings read synchronously from the already-open preferences,
+  /// without resolving the background image path. Used for the first frame:
+  /// starting from the defaults (dark theme) and switching once the async
+  /// load finished animated the theme and flashed grey on every launch.
+  AppSettings loadSettingsPreview() {
+    final raw = _preferences.getString(_settingsKey);
+    if (raw == null) return const AppSettings();
+    try {
+      return AppSettings.fromJson(jsonDecode(raw) as Map<String, dynamic>);
+    } on Object {
+      return const AppSettings();
+    }
+  }
+
   Future<AppSettings> loadSettings() async {
     final raw = _preferences.getString(_settingsKey);
     if (raw == null) return const AppSettings();

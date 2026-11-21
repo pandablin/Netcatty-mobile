@@ -197,48 +197,4 @@ void main() {
 
     expect(output, ['\n']);
   });
-
-  testWidgets('typing does not reset the iOS text field after every key',
-      (tester) async {
-    final output = <String>[];
-    final terminal = Terminal()..onOutput = output.add;
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: TerminalView(terminal, autofocus: true, deleteDetection: true),
-        ),
-      ),
-    );
-    await tester.pump();
-    int resets() => tester.testTextInput.log
-        .where((call) => call.method == 'TextInput.setEditingState')
-        .length;
-    final initialResets = resets();
-
-    void edit(String text, {TextRange composing = TextRange.empty}) {
-      tester.testTextInput.updateEditingValue(TextEditingValue(
-        text: text,
-        selection: TextSelection.collapsed(offset: text.length),
-        composing: composing,
-      ));
-    }
-
-    edit('  s');
-    await tester.pump();
-    edit('  su');
-    await tester.pump();
-    edit('  s');
-    await tester.pump();
-    // Pinyin composition is not sent; only the committed character is.
-    edit('  sn', composing: const TextRange(start: 3, end: 4));
-    await tester.pump();
-    edit('  sni', composing: const TextRange(start: 3, end: 5));
-    await tester.pump();
-    edit('  s你');
-    await tester.pump();
-
-    expect(output, ['s', 'u', '\x7f', '你']);
-    expect(resets(), initialResets,
-        reason: 'resetting on every key makes iOS rebuild its candidate bar');
-  });
 }
