@@ -58,6 +58,7 @@ class AppSettings {
     this.terminalFontSize = 14,
     this.terminalSecureKeyboard = false,
     this.terminalTapToKeyboard = true,
+    this.terminalImeSuggestions = false,
     this.sftpSyntaxHighlight = true,
     this.customBackgroundEnabled = false,
     this.customBackgroundPath = '',
@@ -114,6 +115,7 @@ class AppSettings {
           .toDouble(),
       terminalSecureKeyboard: json['terminalSecureKeyboard'] == true,
       terminalTapToKeyboard: json['terminalTapToKeyboard'] != false,
+      terminalImeSuggestions: json['terminalImeSuggestions'] == true,
       sftpSyntaxHighlight: json['sftpSyntaxHighlight'] != false,
       customBackgroundEnabled: json['customBackgroundEnabled'] == true,
       customBackgroundPath: json['customBackgroundPath']?.toString() ?? '',
@@ -151,6 +153,10 @@ class AppSettings {
   /// Whether tapping the terminal opens the soft keyboard. When off, only the
   /// toolbar keyboard button does (upstream #36).
   final bool terminalTapToKeyboard;
+
+  /// Experimental: keep the typed word in the keyboard's text field so input
+  /// methods show stable suggestions instead of flickering. Off by default.
+  final bool terminalImeSuggestions;
   final bool sftpSyntaxHighlight;
   final bool customBackgroundEnabled;
   final String customBackgroundPath;
@@ -174,6 +180,7 @@ class AppSettings {
     double? terminalFontSize,
     bool? terminalSecureKeyboard,
     bool? terminalTapToKeyboard,
+    bool? terminalImeSuggestions,
     bool? sftpSyntaxHighlight,
     bool? customBackgroundEnabled,
     String? customBackgroundPath,
@@ -199,6 +206,8 @@ class AppSettings {
             terminalSecureKeyboard ?? this.terminalSecureKeyboard,
         terminalTapToKeyboard:
             terminalTapToKeyboard ?? this.terminalTapToKeyboard,
+        terminalImeSuggestions:
+            terminalImeSuggestions ?? this.terminalImeSuggestions,
         sftpSyntaxHighlight: sftpSyntaxHighlight ?? this.sftpSyntaxHighlight,
         customBackgroundEnabled:
             customBackgroundEnabled ?? this.customBackgroundEnabled,
@@ -228,6 +237,7 @@ class AppSettings {
         'terminalFontSize': terminalFontSize,
         'terminalSecureKeyboard': terminalSecureKeyboard,
         'terminalTapToKeyboard': terminalTapToKeyboard,
+        'terminalImeSuggestions': terminalImeSuggestions,
         'sftpSyntaxHighlight': sftpSyntaxHighlight,
         'customBackgroundEnabled': customBackgroundEnabled,
         'customBackgroundPath': customBackgroundPath,

@@ -398,6 +398,23 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                             : _setTerminalSecureKeyboard,
                       ),
                       SwitchListTile(
+                        key: const ValueKey('terminal-ime-suggestions'),
+                        contentPadding: EdgeInsets.zero,
+                        title: const LText('显示输入法联想词（实验）'),
+                        subtitle: const LText(
+                          '打字时输入法候选栏保持稳定、可显示联想词。若发现按键或删除后发送了未输入的内容，请关闭此项',
+                        ),
+                        value: ref
+                            .watch(settingsControllerProvider)
+                            .terminalImeSuggestions,
+                        onChanged: ref.watch(settingsControllerProvider)
+                                .terminalSecureKeyboard
+                            ? null
+                            : (value) => ref
+                                .read(settingsControllerProvider.notifier)
+                                .updateTerminalImeSuggestions(value),
+                      ),
+                      SwitchListTile(
                         key: const ValueKey('terminal-tap-to-keyboard'),
                         contentPadding: EdgeInsets.zero,
                         title: const LText('点击终端弹出键盘'),

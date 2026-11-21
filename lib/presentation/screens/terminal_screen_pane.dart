@@ -209,6 +209,7 @@ class _TerminalPane extends StatefulWidget {
     required this.pictureInPicture,
     required this.transparentBackground,
     this.tapToKeyboard = true,
+    this.imeSuggestions = false,
     this.keyboard,
   });
   final ActiveTerminalSession session;
@@ -219,6 +220,9 @@ class _TerminalPane extends StatefulWidget {
 
   /// Whether a tap may open the soft keyboard (setting, upstream #36).
   final bool tapToKeyboard;
+
+  /// Experimental keyboard-suggestion mode (setting).
+  final bool imeSuggestions;
 
   /// Set only on the pane that receives toolbar keyboard requests.
   final _TerminalKeyboardBridge? keyboard;
@@ -257,7 +261,8 @@ class _TerminalPaneState extends State<_TerminalPane> {
   @override
   void didUpdateWidget(covariant _TerminalPane oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.secureKeyboard != widget.secureKeyboard) {
+    if (oldWidget.secureKeyboard != widget.secureKeyboard ||
+        oldWidget.imeSuggestions != widget.imeSuggestions) {
       // xterm keeps the platform TextInputConnection alive while the view is
       // mounted. Recreate it so Android and iOS receive the new input type.
       _terminalViewKey = GlobalKey<TerminalViewState>();
@@ -485,7 +490,12 @@ class _TerminalPaneState extends State<_TerminalPane> {
             keyboardAppearance: Theme.of(context).brightness,
             keyboardType: widget.secureKeyboard
                 ? TextInputType.visiblePassword
-                : TextInputType.emailAddress,
+                // The email type made keyboards offer "@qq.com"-style
+                // completions; plain text gives ordinary word suggestions.
+                : widget.imeSuggestions
+                    ? TextInputType.text
+                    : TextInputType.emailAddress,
+            keepImeContext: widget.imeSuggestions && !widget.secureKeyboard,
             deleteDetection: true,
             focusNode: _focusNode,
             autofocus: !widget.pictureInPicture && widget.tapToKeyboard,

@@ -277,6 +277,8 @@ class _TerminalScreenState extends ConsumerState<TerminalScreen> {
                                         settings.terminalSecureKeyboard,
                                     tapToKeyboard:
                                         settings.terminalTapToKeyboard,
+                                    imeSuggestions:
+                                        settings.terminalImeSuggestions,
                                     keyboard:
                                         pictureInPicture ? null : _keyboard,
                                     pictureInPicture: pictureInPicture,
@@ -296,6 +298,8 @@ class _TerminalScreenState extends ConsumerState<TerminalScreen> {
                                           settings.terminalSecureKeyboard,
                                       tapToKeyboard:
                                           settings.terminalTapToKeyboard,
+                                      imeSuggestions:
+                                          settings.terminalImeSuggestions,
                                       keyboard: _keyboard,
                                       pictureInPicture: false,
                                       transparentBackground: customBackground,
@@ -312,6 +316,8 @@ class _TerminalScreenState extends ConsumerState<TerminalScreen> {
                                           settings.terminalSecureKeyboard,
                                       tapToKeyboard:
                                           settings.terminalTapToKeyboard,
+                                      imeSuggestions:
+                                          settings.terminalImeSuggestions,
                                       pictureInPicture: false,
                                       transparentBackground: customBackground,
                                     ),

@@ -36,6 +36,13 @@ Widget _toolbar({
     );
 
 void main() {
+  test('keyboard suggestion mode defaults off and round-trips', () {
+    expect(const AppSettings().terminalImeSuggestions, isFalse);
+    final on = AppSettings.fromJson(const {'terminalImeSuggestions': true});
+    expect(on.terminalImeSuggestions, isTrue);
+    expect(on.toJson()['terminalImeSuggestions'], isTrue);
+  });
+
   test('tap-to-keyboard defaults on and round-trips through JSON', () {
     expect(const AppSettings().terminalTapToKeyboard, isTrue);
     expect(AppSettings.fromJson(const {}).terminalTapToKeyboard, isTrue);

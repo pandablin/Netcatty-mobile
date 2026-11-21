@@ -1,4 +1,7 @@
 const englishTranslations = <String, String>{
+  '显示输入法联想词（实验）': 'Show keyboard suggestions (experimental)',
+  '打字时输入法候选栏保持稳定、可显示联想词。若发现按键或删除后发送了未输入的内容，请关闭此项':
+      'Keeps the keyboard suggestion bar steady while typing. Turn this off if a key or delete ever sends text you did not type.',
   '已连接': 'Connected',
   'Gist 元数据过大（修订历史或其他文件太多），请新建一个只存放保险库的 Gist':
       'The gist metadata is too large (too many revisions or other files). Create a new gist that only holds the vault',

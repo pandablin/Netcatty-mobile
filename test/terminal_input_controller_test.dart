@@ -197,4 +197,65 @@ void main() {
 
     expect(output, ['\n']);
   });
+
+  testWidgets('suggestion mode keeps the word and sends exact differences',
+      (tester) async {
+    final output = <String>[];
+    final terminal = Terminal()..onOutput = output.add;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TerminalView(
+            terminal,
+            autofocus: true,
+            deleteDetection: true,
+            keepImeContext: true,
+            keyboardType: TextInputType.text,
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    int resets() => tester.testTextInput.log
+        .where((call) => call.method == 'TextInput.setEditingState')
+        .length;
+    final initialResets = resets();
+
+    Future<void> edit(String text,
+        {TextRange composing = TextRange.empty}) async {
+      tester.testTextInput.updateEditingValue(TextEditingValue(
+        text: text,
+        selection: TextSelection.collapsed(offset: text.length),
+        composing: composing,
+      ));
+      await tester.pump();
+    }
+
+    // The sequence from the bug report: type "sg", the keyboard inserts a
+    // suggested "@qq.com", then delete removes one character.
+    await edit('  s');
+    await edit('  sg');
+    await edit('  sg@qq.com');
+    await edit('  sg@qq.co');
+    expect(output, ['s', 'g', '@qq.com', '\x7f']);
+    expect(resets(), initialResets, reason: 'no reset while editing a word');
+
+    // A keyboard replacing the whole word becomes backspaces plus the word.
+    output.clear();
+    await edit('  sudo');
+    // Common prefix "  s"; "g@qq.co" (7 characters) is replaced by "udo".
+    expect(output, [...List.filled(7, '\x7f'), 'udo']);
+
+    // Pinyin composition is not sent; only the committed character is.
+    output.clear();
+    await edit('  sudon', composing: const TextRange(start: 6, end: 7));
+    await edit('  sudo你');
+    expect(output, ['你']);
+
+    // Submitting a line resets the field for the next word.
+    output.clear();
+    await edit('  sudo你\n');
+    expect(output, ['\n']);
+    expect(resets(), initialResets + 1);
+  });
 }
