@@ -34,6 +34,16 @@ class SettingsController extends StateNotifier<AppSettings> {
     await update(persisted.copyWith(terminalImeSuggestions: enabled));
   }
 
+  Future<void> updateLiveActivityEnabled(bool enabled) async {
+    final persisted = await repository.loadSettings();
+    await update(persisted.copyWith(liveActivityEnabled: enabled));
+  }
+
+  Future<void> updateLiveActivityShowCommand(bool enabled) async {
+    final persisted = await repository.loadSettings();
+    await update(persisted.copyWith(liveActivityShowCommand: enabled));
+  }
+
   Future<void> updateTerminalTapToKeyboard(bool enabled) async {
     final persisted = await repository.loadSettings();
     await update(persisted.copyWith(terminalTapToKeyboard: enabled));

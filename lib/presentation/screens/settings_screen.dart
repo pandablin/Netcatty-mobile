@@ -429,6 +429,40 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                             .read(settingsControllerProvider.notifier)
                             .updateTerminalTapToKeyboard(value),
                       ),
+                      if (Platform.isIOS) ...[
+                        SwitchListTile(
+                          key: const ValueKey('live-activity-enabled'),
+                          contentPadding: EdgeInsets.zero,
+                          title: const LText('灵动岛显示连接'),
+                          subtitle: const LText(
+                            '切到后台时在灵动岛和锁屏显示已连接的服务器、连接时长',
+                          ),
+                          value: ref
+                              .watch(settingsControllerProvider)
+                              .liveActivityEnabled,
+                          onChanged: (value) => ref
+                              .read(settingsControllerProvider.notifier)
+                              .updateLiveActivityEnabled(value),
+                        ),
+                        SwitchListTile(
+                          key: const ValueKey('live-activity-command'),
+                          contentPadding: EdgeInsets.zero,
+                          title: const LText('灵动岛显示最近命令'),
+                          subtitle: const LText(
+                            '展开灵动岛或在锁屏上显示最后执行的命令；命令里有密码等敏感内容时建议关闭',
+                          ),
+                          value: ref
+                              .watch(settingsControllerProvider)
+                              .liveActivityShowCommand,
+                          onChanged: ref
+                                  .watch(settingsControllerProvider)
+                                  .liveActivityEnabled
+                              ? (value) => ref
+                                  .read(settingsControllerProvider.notifier)
+                                  .updateLiveActivityShowCommand(value)
+                              : null,
+                        ),
+                      ],
                       SwitchListTile(
                         contentPadding: EdgeInsets.zero,
                         title: const LText('SFTP 代码高亮'),

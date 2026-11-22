@@ -3,6 +3,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'application/auto_sync_controller.dart';
+import 'application/live_activity_controller.dart';
 import 'application/settings_controller.dart';
 import 'application/session_controller.dart';
 import 'infrastructure/ssh/connection_platform_service.dart';
@@ -31,6 +32,8 @@ class _NetcattyAppState extends ConsumerState<NetcattyApp>
           ref.read(autoSyncControllerProvider.notifier).setEnabled(enabled),
       fireImmediately: true,
     );
+    // Starts mirroring terminal sessions into the iOS Dynamic Island.
+    ref.read(liveActivityControllerProvider);
   }
 
   @override
@@ -46,6 +49,8 @@ class _NetcattyAppState extends ConsumerState<NetcattyApp>
       ConnectionPlatformService.endBackgroundGrace();
       ref.read(sessionControllerProvider.notifier).setBackgrounded(false);
       ref.read(autoSyncControllerProvider.notifier).onAppResumed();
+      // A Live Activity can only be started in the foreground; retry here.
+      ref.read(liveActivityControllerProvider).schedule();
     } else if (state == AppLifecycleState.inactive ||
         state == AppLifecycleState.paused ||
         state == AppLifecycleState.hidden) {

@@ -101,6 +101,9 @@ class ActiveTerminalSession {
   bool connected = true;
   bool closedByUser = false;
   ServerSystemInfo? systemInfo;
+
+  /// When this connection (or its latest reconnect) was established.
+  final DateTime connectedAt = DateTime.now();
   SessionMonitor? monitor;
 
   SSHClient? get sshClient => sshClients.isEmpty ? null : sshClients.last;

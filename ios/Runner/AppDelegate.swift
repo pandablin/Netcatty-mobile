@@ -10,6 +10,7 @@ import UIKit
   private var sshBackgroundTask: UIBackgroundTaskIdentifier = .invalid
   private let sshBackgroundAudioKeeper = SshBackgroundAudioKeeper()
   private var pictureInPictureChannel: FlutterMethodChannel?
+  private var liveActivityChannel: FlutterMethodChannel?
   private var terminalPictureInPictureStorage: AnyObject?
 
   override func application(
@@ -44,6 +45,9 @@ import UIKit
         result(FlutterMethodNotImplemented)
       }
     }
+    liveActivityChannel = LiveActivityBridge.register(
+      messenger: engineBridge.applicationRegistrar.messenger()
+    )
     let pictureInPictureChannel = FlutterMethodChannel(
       name: "app.netcatty.mobile/picture_in_picture",
       binaryMessenger: engineBridge.applicationRegistrar.messenger()
@@ -160,6 +164,7 @@ import UIKit
     }
     sshBackgroundAudioKeeper.setActive(false, deactivateSessionWhenStopping: true)
     endSshBackgroundGrace()
+    LiveActivityBridge.endAllBlocking()
     super.applicationWillTerminate(application)
   }
 }

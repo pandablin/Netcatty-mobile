@@ -1,4 +1,10 @@
 const englishTranslations = <String, String>{
+  '灵动岛显示连接': 'Show connections in Dynamic Island',
+  '切到后台时在灵动岛和锁屏显示已连接的服务器、连接时长':
+      'When the app is in the background, show connected servers and connection time in the Dynamic Island and on the Lock Screen',
+  '灵动岛显示最近命令': 'Show last command in Dynamic Island',
+  '展开灵动岛或在锁屏上显示最后执行的命令；命令里有密码等敏感内容时建议关闭':
+      'Show the last command you ran in the expanded Dynamic Island and on the Lock Screen. Turn off if your commands contain passwords or other secrets',
   '显示输入法联想词': 'Show keyboard suggestions',
   '打字时输入法候选栏保持稳定、可选择联想词。关闭后每个按键都会清空输入框，候选栏会闪烁、无法选词':
       'Keeps the keyboard suggestion bar steady so suggestions can be picked. When off, the input field is cleared after every key, so the bar flickers and suggestions cannot be picked.',

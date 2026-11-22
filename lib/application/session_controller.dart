@@ -6,6 +6,7 @@ import 'package:uuid/uuid.dart';
 import '../domain/models/host.dart';
 import '../infrastructure/ssh/ssh_service.dart';
 import '../infrastructure/ssh/server_monitor_service.dart';
+import '../infrastructure/ssh/shell_command_capture.dart';
 import 'vault_controller.dart';
 
 enum PendingConnectionPhase { connecting, failed }
@@ -108,6 +109,14 @@ class SessionController extends StateNotifier<SessionState> {
   DateTime? _nextBackgroundReconnect;
   int _backgroundReconnectAttempt = 0;
   final _cancelledConnectionIds = <String>{};
+  final _lastCommands = <String, String>{};
+
+  /// Called after a shell command is submitted; the Live Activity listens.
+  void Function()? onCommandCaptured;
+
+  /// The last command typed at a shell prompt in [sessionId] (kept across
+  /// reconnects of the same tab).
+  String? lastCommandFor(String sessionId) => _lastCommands[sessionId];
 
   static const _backgroundMaintenanceInterval = Duration(seconds: 8);
   static const _backgroundReconnectDelays = <Duration>[
@@ -271,6 +280,7 @@ class SessionController extends StateNotifier<SessionState> {
   }
 
   void _watchSession(ActiveTerminalSession session) {
+    _captureCommands(session);
     if (session.isSsh) {
       session.monitor ??= SessionMonitor(session);
       session.monitor!.start();
@@ -278,6 +288,23 @@ class SessionController extends StateNotifier<SessionState> {
     unawaited(session.done.then((_) {
       _markDisconnected(session);
     }));
+  }
+
+  void _captureCommands(ActiveTerminalSession session) {
+    final forward = session.terminal.onOutput;
+    if (forward == null) return;
+    session.terminal.onOutput = (data) {
+      // Read the prompt line before the shell receives Enter and echoes the
+      // newline; this keeps tab completion / history recall accurate.
+      if (data.contains('\r')) {
+        final command = captureShellCommand(session.terminal);
+        if (command != null && _lastCommands[session.id] != command) {
+          _lastCommands[session.id] = command;
+          onCommandCaptured?.call();
+        }
+      }
+      forward(data);
+    };
   }
 
   void setBackgrounded(bool backgrounded) {
@@ -455,6 +482,7 @@ class SessionController extends StateNotifier<SessionState> {
     if (index < 0 || index >= state.sessions.length) return;
     final sessions = [...state.sessions];
     final removed = sessions.removeAt(index);
+    _lastCommands.remove(removed.id);
     await removed.close();
     var activeIndex = state.activeIndex;
     if (index < activeIndex) {

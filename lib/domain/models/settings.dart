@@ -59,6 +59,8 @@ class AppSettings {
     this.terminalSecureKeyboard = false,
     this.terminalTapToKeyboard = true,
     this.terminalImeSuggestions = true,
+    this.liveActivityEnabled = true,
+    this.liveActivityShowCommand = true,
     this.sftpSyntaxHighlight = true,
     this.customBackgroundEnabled = false,
     this.customBackgroundPath = '',
@@ -116,6 +118,8 @@ class AppSettings {
       terminalSecureKeyboard: json['terminalSecureKeyboard'] == true,
       terminalTapToKeyboard: json['terminalTapToKeyboard'] != false,
       terminalImeSuggestions: json['terminalImeSuggestions'] != false,
+      liveActivityEnabled: json['liveActivityEnabled'] != false,
+      liveActivityShowCommand: json['liveActivityShowCommand'] != false,
       sftpSyntaxHighlight: json['sftpSyntaxHighlight'] != false,
       customBackgroundEnabled: json['customBackgroundEnabled'] == true,
       customBackgroundPath: json['customBackgroundPath']?.toString() ?? '',
@@ -158,6 +162,12 @@ class AppSettings {
   /// stable suggestions instead of flickering. Turning it off restores the
   /// upstream xterm behaviour (reset after every key).
   final bool terminalImeSuggestions;
+
+  /// iOS: show connected servers in the Dynamic Island / Lock Screen.
+  final bool liveActivityEnabled;
+
+  /// iOS: include the last command typed at a shell prompt in that activity.
+  final bool liveActivityShowCommand;
   final bool sftpSyntaxHighlight;
   final bool customBackgroundEnabled;
   final String customBackgroundPath;
@@ -182,6 +192,8 @@ class AppSettings {
     bool? terminalSecureKeyboard,
     bool? terminalTapToKeyboard,
     bool? terminalImeSuggestions,
+    bool? liveActivityEnabled,
+    bool? liveActivityShowCommand,
     bool? sftpSyntaxHighlight,
     bool? customBackgroundEnabled,
     String? customBackgroundPath,
@@ -209,6 +221,9 @@ class AppSettings {
             terminalTapToKeyboard ?? this.terminalTapToKeyboard,
         terminalImeSuggestions:
             terminalImeSuggestions ?? this.terminalImeSuggestions,
+        liveActivityEnabled: liveActivityEnabled ?? this.liveActivityEnabled,
+        liveActivityShowCommand:
+            liveActivityShowCommand ?? this.liveActivityShowCommand,
         sftpSyntaxHighlight: sftpSyntaxHighlight ?? this.sftpSyntaxHighlight,
         customBackgroundEnabled:
             customBackgroundEnabled ?? this.customBackgroundEnabled,
@@ -239,6 +254,8 @@ class AppSettings {
         'terminalSecureKeyboard': terminalSecureKeyboard,
         'terminalTapToKeyboard': terminalTapToKeyboard,
         'terminalImeSuggestions': terminalImeSuggestions,
+        'liveActivityEnabled': liveActivityEnabled,
+        'liveActivityShowCommand': liveActivityShowCommand,
         'sftpSyntaxHighlight': sftpSyntaxHighlight,
         'customBackgroundEnabled': customBackgroundEnabled,
         'customBackgroundPath': customBackgroundPath,
