@@ -27,16 +27,16 @@ void main() {
     test('reads the command after common prompts', () {
       expect(commandFromPromptLine('root@jp:~# ping 45.153.247.231'),
           'ping 45.153.247.231');
-      expect(commandFromPromptLine('demo@box:~/src\$ git status'),
-          'git status');
+      expect(
+          commandFromPromptLine('demo@box:~/src\$ git status'), 'git status');
       expect(commandFromPromptLine('[root@centos ~]# top'), 'top');
       expect(commandFromPromptLine('~/code ❯ ls -la'), 'ls -la');
       expect(commandFromPromptLine('host% make'), 'make');
     });
 
     test('keeps redirections inside the command', () {
-      expect(commandFromPromptLine('root@jp:~# echo a > b.txt'),
-          'echo a > b.txt');
+      expect(
+          commandFromPromptLine('root@jp:~# echo a > b.txt'), 'echo a > b.txt');
     });
 
     test('ignores password prompts and empty commands', () {
