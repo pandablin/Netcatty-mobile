@@ -117,6 +117,12 @@ jobs:
         shell: bash
         run: |
           PACKAGE="netcatty-mobile-v${{ steps.app_version.outputs.version }}-ios-unsigned.ipa"
+          APPEX=build/ios/iphoneos/Runner.app/PlugIns/NetcattyWidgets.appex
+          if [[ ! -f "$APPEX/NetcattyWidgets" ]]; then
+            echo "Live Activity widget extension is missing from Runner.app" >&2
+            exit 1
+          fi
+          du -sh "$APPEX"
           mkdir -p dist build/ios/iphoneos/Payload
           cp -R build/ios/iphoneos/Runner.app build/ios/iphoneos/Payload/
           cd build/ios/iphoneos
