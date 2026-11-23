@@ -82,24 +82,24 @@ void main() {
     expect(shows, 1, reason: 'an open keyboard is hidden, not shown again');
   });
 
-  testWidgets('Ctrl+C added to the defaults stays on two rows and sends ^C',
+  testWidgets('a 13th key keeps two rows; Ctrl+C sends ^C',
       (tester) async {
     final sent = <String>[];
     await tester.pumpWidget(
       _toolbar(
         keyboardOpen: ValueNotifier(true),
         onShowKeyboard: _ignore,
-        order: const [...defaultTerminalQuickKeys, 'ctrlC'],
+        order: const [...defaultTerminalQuickKeys, 'ctrlD'],
         onSend: sent.add,
       ),
     );
     await tester.pumpAndSettle();
-    final ctrlC = find.text('Ctrl+C');
-    expect(ctrlC, findsOneWidget);
     expect(
-      tester.getCenter(ctrlC).dy,
+      tester.getCenter(find.text('Ctrl+D')).dy,
       closeTo(tester.getCenter(find.text('Shift')).dy, 1),
     );
+    final ctrlC = find.text('Ctrl+C');
+    expect(ctrlC, findsOneWidget);
     await tester.tap(ctrlC);
     await tester.pump();
     expect(sent, ['\x03']);
@@ -115,6 +115,6 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.text('Ctrl+C'), findsOneWidget);
-    expect(find.text('Home'), findsNothing);
+    expect(find.text('Alt'), findsNothing);
   });
 }

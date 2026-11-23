@@ -100,7 +100,11 @@ class AppSettings {
     final storedOrder = rawStoredOrder.where(supported.contains).toList();
     final order = storedOrder.isEmpty ||
             _sameStrings(rawStoredOrder, legacyDefaultTerminalQuickKeys) ||
-            _sameStrings(rawStoredOrder, previousMobileDefaultTerminalQuickKeys)
+            _sameStrings(
+              rawStoredOrder,
+              previousMobileDefaultTerminalQuickKeys,
+            ) ||
+            _sameStrings(rawStoredOrder, homeEndDefaultTerminalQuickKeys)
         ? defaultTerminalQuickKeys
         : storedOrder;
     final selectedAiModel =
@@ -320,7 +324,25 @@ class AppSettings {
   }
 }
 
+/// Two rows of six with the arrow keys as a cross (↑ above ↓). Home and End
+/// gave way to Ctrl+C and | in 1.8.2.
 const defaultTerminalQuickKeys = <String>[
+  'escape',
+  'alt',
+  'ctrlC',
+  'arrowUp',
+  'pipe',
+  'paste',
+  'tab',
+  'ctrl',
+  'arrowLeft',
+  'arrowDown',
+  'arrowRight',
+  'shift',
+];
+
+/// Defaults up to 1.8.1; migrated to [defaultTerminalQuickKeys].
+const homeEndDefaultTerminalQuickKeys = <String>[
   'escape',
   'alt',
   'home',
@@ -351,7 +373,7 @@ const previousMobileDefaultTerminalQuickKeys = <String>[
 ];
 
 const supportedTerminalQuickKeys = <String>[
-  ...defaultTerminalQuickKeys,
+  ...homeEndDefaultTerminalQuickKeys,
   'ctrlC',
   'ctrlD',
   'ctrlZ',

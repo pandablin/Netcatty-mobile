@@ -266,7 +266,16 @@ void main() {
 
     expect(settings.terminalQuickKeys, defaultTerminalQuickKeys);
     expect(settings.terminalQuickKeys, containsAll(['alt', 'ctrl', 'shift']));
-    expect(settings.terminalQuickKeys, containsAll(['home', 'end', 'paste']));
+    expect(settings.terminalQuickKeys, containsAll(['ctrlC', 'pipe', 'paste']));
+  });
+
+  test('1.8.1 Home/End defaults migrate to the Ctrl+C layout', () {
+    final settings = AppSettings.fromJson({
+      'terminalQuickKeys': homeEndDefaultTerminalQuickKeys,
+    });
+    expect(settings.terminalQuickKeys, defaultTerminalQuickKeys);
+    expect(settings.terminalQuickKeys, isNot(contains('home')));
+    expect(settings.terminalQuickKeys, contains('ctrlC'));
   });
 
   test('previous mobile defaults migrate to the screenshot ordering', () {
@@ -278,9 +287,9 @@ void main() {
     expect(settings.terminalQuickKeys, [
       'escape',
       'alt',
-      'home',
+      'ctrlC',
       'arrowUp',
-      'end',
+      'pipe',
       'paste',
       'tab',
       'ctrl',
@@ -482,7 +491,7 @@ void main() {
       ),
     );
 
-    final firstRow = ['Esc', 'Alt', 'Home', '↑', 'End'];
+    final firstRow = ['Esc', 'Alt', 'Ctrl+C', '↑', '|'];
     final firstRowY = [
       for (final label in firstRow) tester.getCenter(find.text(label)).dy,
       tester.getCenter(find.byTooltip('粘贴')).dy,
@@ -504,7 +513,7 @@ void main() {
       matching: find.byType(TextButton),
     );
     final homeButton = find.ancestor(
-      of: find.text('Home'),
+      of: find.text('Ctrl+C'),
       matching: find.byType(TextButton),
     );
     expect(
