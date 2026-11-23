@@ -86,8 +86,20 @@ class NetcattyTheme {
         color: preset.card,
         elevation: 0,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-          side: BorderSide(color: preset.border),
+          borderRadius: BorderRadius.circular(16),
+          side: BorderSide(
+            color: preset.border.withValues(alpha: dark ? 0.7 : 0.55),
+          ),
+        ),
+      ),
+      popupMenuTheme: PopupMenuThemeData(
+        color: preset.card,
+        surfaceTintColor: Colors.transparent,
+        elevation: 8,
+        shadowColor: Colors.black.withValues(alpha: dark ? 0.5 : 0.18),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(18),
+          side: BorderSide(color: preset.border.withValues(alpha: 0.5)),
         ),
       ),
       dividerColor: preset.border,
@@ -98,11 +110,11 @@ class NetcattyTheme {
           preset.card,
         ),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(12),
           borderSide: BorderSide(color: preset.border),
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(12),
           borderSide: BorderSide(color: preset.border),
         ),
       ),
@@ -114,9 +126,13 @@ class NetcattyTheme {
         backgroundColor: preset.card,
         surfaceTintColor: Colors.transparent,
       ),
+      // Floating so it sits above the glass tab bar instead of under it.
       snackBarTheme: SnackBarThemeData(
         backgroundColor: preset.foreground,
         contentTextStyle: TextStyle(color: preset.background),
+        behavior: SnackBarBehavior.floating,
+        insetPadding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       ),
     );
   }

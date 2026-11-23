@@ -11,6 +11,7 @@ import '../../application/home_navigation.dart';
 import '../../application/host_sorting.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/host_editor.dart';
+import '../widgets/glass.dart';
 import '../widgets/host_system_icon.dart';
 
 class VaultScreen extends ConsumerStatefulWidget {
@@ -21,6 +22,11 @@ class VaultScreen extends ConsumerStatefulWidget {
 }
 
 class _VaultScreenState extends ConsumerState<VaultScreen> {
+  static const _capsule = OutlineInputBorder(
+    borderRadius: BorderRadius.all(Radius.circular(22)),
+    borderSide: BorderSide.none,
+  );
+
   final _search = TextEditingController();
   String? _group;
 
@@ -65,11 +71,14 @@ class _VaultScreenState extends ConsumerState<VaultScreen> {
       manualOrder: settings.hostOrder,
     );
 
+    // Lists scroll under the floating tab bar and stop just above it.
+    final listBottom = MediaQuery.paddingOf(context).bottom + 12;
     return SafeArea(
+      bottom: false,
       child: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 10, 8, 8),
+            padding: const EdgeInsets.fromLTRB(16, 10, 14, 10),
             child: Row(
               children: [
                 Icon(Icons.pets, color: Theme.of(context).colorScheme.primary),
@@ -141,16 +150,22 @@ class _VaultScreenState extends ConsumerState<VaultScreen> {
                       ),
                     ];
                   },
-                  icon: Icon(switch (viewMode) {
-                    'list' => Icons.view_list_outlined,
-                    'tree' => Icons.account_tree_outlined,
-                    _ => Icons.grid_view_outlined,
-                  }),
+                  // The menu button handles the tap; the glass button is
+                  // only the visual (its own onPressed stays null).
+                  child: GlassIconButton(
+                    icon: Icon(switch (viewMode) {
+                      'list' => Icons.view_list_outlined,
+                      'tree' => Icons.account_tree_outlined,
+                      _ => Icons.grid_view_outlined,
+                    }),
+                  ),
                 ),
-                IconButton(
+                const SizedBox(width: 10),
+                GlassIconButton(
+                  key: const ValueKey('vault-add-host'),
                   tooltip: localized('添加主机'),
                   onPressed: () => _editHost(),
-                  icon: const Icon(Icons.add_circle_outline),
+                  icon: const Icon(Icons.add),
                 ),
               ],
             ),
@@ -164,6 +179,21 @@ class _VaultScreenState extends ConsumerState<VaultScreen> {
                 prefixIcon: Icon(Icons.search),
                 hintText: '搜索主机、地址或标签',
                 isDense: true,
+                filled: true,
+                fillColor: Theme.of(context)
+                    .colorScheme
+                    .onSurface
+                    .withValues(alpha: 0.055),
+                border: _capsule,
+                enabledBorder: _capsule,
+                focusedBorder: _capsule.copyWith(
+                  borderSide: BorderSide(
+                    color: Theme.of(context)
+                        .colorScheme
+                        .primary
+                        .withValues(alpha: 0.6),
+                  ),
+                ),
               ),
             ),
           ),
@@ -215,7 +245,7 @@ class _VaultScreenState extends ConsumerState<VaultScreen> {
                             ref.read(vaultControllerProvider.notifier).load(),
                         child: switch (viewMode) {
                           'grid' => GridView.builder(
-                              padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+                              padding: EdgeInsets.fromLTRB(12, 8, 12, listBottom),
                               gridDelegate:
                                   SliverGridDelegateWithMaxCrossAxisExtent(
                                 maxCrossAxisExtent: 230,
@@ -241,13 +271,14 @@ class _VaultScreenState extends ConsumerState<VaultScreen> {
                             ),
                           'tree' => _HostTree(
                               hosts: hosts,
+                              bottomPadding: listBottom,
                               connectedHostIds: connectedHostIds,
                               onTap: _onHostTap,
                               onLongPress: _onHostLongPress,
                               onEdit: _editHost,
                             ),
                           _ => ListView.separated(
-                              padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+                              padding: EdgeInsets.fromLTRB(12, 8, 12, listBottom),
                               itemCount: hosts.length,
                               separatorBuilder: (_, __) =>
                                   const SizedBox(height: 6),
@@ -878,8 +909,10 @@ class _HostTree extends StatelessWidget {
     required this.onLongPress,
     required this.onEdit,
     this.connectedHostIds = const {},
+    this.bottomPadding = 12,
   });
 
+  final double bottomPadding;
   final List<HostProfile> hosts;
   final Set<String> connectedHostIds;
   final ValueChanged<HostProfile> onTap;
@@ -905,7 +938,7 @@ class _HostTree extends StatelessWidget {
         return a.toLowerCase().compareTo(b.toLowerCase());
       });
     return ListView.builder(
-      padding: const EdgeInsets.all(12),
+      padding: EdgeInsets.fromLTRB(12, 8, 12, bottomPadding),
       itemCount: groups.length,
       itemBuilder: (context, index) {
         final group = groups[index];
@@ -1020,7 +1053,8 @@ class _HostCard extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) => Card(
+  Widget build(BuildContext context) => PressScale(
+        child: Card(
         margin: EdgeInsets.zero,
         clipBehavior: Clip.antiAlias,
         child: InkWell(
@@ -1078,6 +1112,7 @@ class _HostCard extends StatelessWidget {
             ),
           ),
         ),
+        ),
       );
 }
 
@@ -1095,7 +1130,9 @@ class _HostTile extends StatelessWidget {
   final VoidCallback onLongPress;
   final VoidCallback onEdit;
   @override
-  Widget build(BuildContext context) => Card(
+  Widget build(BuildContext context) => PressScale(
+        scale: 0.98,
+        child: Card(
         margin: EdgeInsets.zero,
         child: ListTile(
           dense: true,
@@ -1113,6 +1150,7 @@ class _HostTile extends StatelessWidget {
             onPressed: onEdit,
             icon: const Icon(Icons.more_vert),
           ),
+        ),
         ),
       );
 }

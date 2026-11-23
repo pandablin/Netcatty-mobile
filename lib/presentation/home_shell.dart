@@ -13,6 +13,7 @@ import 'screens/snippets_screen.dart';
 import 'screens/terminal_screen.dart';
 import 'screens/vault_screen.dart';
 import 'widgets/custom_background.dart';
+import 'widgets/glass.dart';
 
 class HomeShell extends ConsumerWidget {
   const HomeShell({super.key});
@@ -51,7 +52,10 @@ class HomeShell extends ConsumerWidget {
         }
       },
       child: Scaffold(
-        extendBody: globalBackground,
+        // Pages scroll under the floating glass tab bar. The terminal keeps
+        // its own layout (it stops above the bar) unless a background image
+        // spans every tab.
+        extendBody: globalBackground || index != 1,
         body: Stack(
           fit: StackFit.expand,
           children: [
@@ -77,69 +81,44 @@ class HomeShell extends ConsumerWidget {
         ),
         bottomNavigationBar: hideNavigation
             ? null
-            : _navigationBar(
-                context,
-                ref,
-                index,
-                transparent: globalBackground,
-              ),
+            : _navigationBar(ref, index),
       ),
     );
   }
 
-  Widget _navigationBar(
-    BuildContext context,
-    WidgetRef ref,
-    int selectedIndex, {
-    required bool transparent,
-  }) {
-    final navigation = NavigationBar(
-      key: const ValueKey('home-navigation-bar'),
-      selectedIndex: selectedIndex,
-      onDestinationSelected: (value) =>
-          ref.read(homeTabProvider.notifier).state = value,
-      destinations: [
-        NavigationDestination(
-          icon: const Icon(Icons.dns_outlined),
-          selectedIcon: const Icon(Icons.dns),
-          label: localized('保险库'),
-        ),
-        NavigationDestination(
-          icon: const Icon(Icons.terminal_outlined),
-          selectedIcon: const Icon(Icons.terminal),
-          label: localized('终端'),
-        ),
-        NavigationDestination(
-          icon: const Icon(Icons.folder_outlined),
-          selectedIcon: const Icon(Icons.folder),
-          label: localized('文件'),
-        ),
-        NavigationDestination(
-          icon: const Icon(Icons.code_outlined),
-          selectedIcon: const Icon(Icons.code),
-          label: localized('片段'),
-        ),
-        NavigationDestination(
-          icon: const Icon(Icons.settings_outlined),
-          selectedIcon: const Icon(Icons.settings),
-          label: localized('设置'),
-        ),
-      ],
-    );
-    if (!transparent) return navigation;
-    final theme = Theme.of(context);
-    return Theme(
-      data: theme.copyWith(
-        navigationBarTheme: theme.navigationBarTheme.copyWith(
-          backgroundColor: Colors.transparent,
-          surfaceTintColor: Colors.transparent,
-          shadowColor: Colors.transparent,
-          elevation: 0,
-        ),
-      ),
-      child: navigation,
-    );
-  }
+  Widget _navigationBar(WidgetRef ref, int selectedIndex) =>
+      GlassTabBar(
+        key: const ValueKey('home-navigation-bar'),
+        selectedIndex: selectedIndex,
+        onSelected: (value) => ref.read(homeTabProvider.notifier).state = value,
+        items: [
+          GlassTabItem(
+            icon: Icons.dns_outlined,
+            selectedIcon: Icons.dns,
+            label: localized('保险库'),
+          ),
+          GlassTabItem(
+            icon: Icons.terminal_outlined,
+            selectedIcon: Icons.terminal,
+            label: localized('终端'),
+          ),
+          GlassTabItem(
+            icon: Icons.folder_outlined,
+            selectedIcon: Icons.folder,
+            label: localized('文件'),
+          ),
+          GlassTabItem(
+            icon: Icons.code_outlined,
+            selectedIcon: Icons.code,
+            label: localized('片段'),
+          ),
+          GlassTabItem(
+            icon: Icons.settings_outlined,
+            selectedIcon: Icons.settings,
+            label: localized('设置'),
+          ),
+        ],
+      );
 }
 
 bool shouldHideHomeNavigation(int tabIndex, bool terminalFullscreen) =>

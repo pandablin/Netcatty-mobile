@@ -254,14 +254,20 @@ class _TerminalSpecialKeysState extends ConsumerState<TerminalSpecialKeys> {
             minimumSize: Size.zero,
             padding: const EdgeInsets.symmetric(horizontal: 4),
             tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            // Subtle key caps, like the iOS keyboard, so each key reads as a
+            // separate button.
             backgroundColor: selected
                 ? Theme.of(context).colorScheme.primaryContainer
-                : null,
+                : Theme.of(context).colorScheme.onSurface.withValues(
+                      alpha: Theme.of(context).brightness == Brightness.dark
+                          ? 0.09
+                          : 0.055,
+                    ),
             foregroundColor: selected
                 ? Theme.of(context).colorScheme.onPrimaryContainer
                 : Theme.of(context).colorScheme.onSurface,
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(7),
+              borderRadius: BorderRadius.circular(9),
             ),
           ),
           child: key.icon == null

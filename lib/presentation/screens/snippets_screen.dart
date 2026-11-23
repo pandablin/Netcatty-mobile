@@ -7,6 +7,7 @@ import '../../application/session_controller.dart';
 import '../../application/vault_controller.dart';
 import '../../domain/models/host.dart';
 import '../widgets/empty_state.dart';
+import '../widgets/glass.dart';
 
 class SnippetsScreen extends ConsumerWidget {
   const SnippetsScreen({super.key});
@@ -16,13 +17,18 @@ class SnippetsScreen extends ConsumerWidget {
     final vault = ref.watch(vaultControllerProvider).data;
     final snippets = vault?.snippets ?? const <CommandSnippet>[];
     return SafeArea(
+      // The list scrolls under the floating glass tab bar.
+      bottom: false,
       child: Scaffold(
         appBar: AppBar(
           title: const LText('命令片段'),
           actions: [
-            IconButton(
-              onPressed: () => _edit(context, ref),
-              icon: const Icon(Icons.add),
+            Padding(
+              padding: const EdgeInsets.only(right: 14),
+              child: GlassIconButton(
+                onPressed: () => _edit(context, ref),
+                icon: const Icon(Icons.add),
+              ),
             ),
           ],
         ),
@@ -38,7 +44,12 @@ class SnippetsScreen extends ConsumerWidget {
                 ),
               )
             : ListView.separated(
-                padding: const EdgeInsets.all(12),
+                padding: EdgeInsets.fromLTRB(
+                  12,
+                  12,
+                  12,
+                  MediaQuery.paddingOf(context).bottom + 12,
+                ),
                 itemCount: snippets.length,
                 separatorBuilder: (_, __) => const SizedBox(height: 8),
                 itemBuilder: (_, index) {

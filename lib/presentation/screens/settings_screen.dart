@@ -171,10 +171,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     AutoSyncState autoSyncState,
   ) =>
       SafeArea(
+        // The list scrolls under the floating glass tab bar.
+        bottom: false,
         child: Scaffold(
           appBar: AppBar(title: const LText('设置')),
           body: ListView(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+            padding: EdgeInsets.fromLTRB(
+              16,
+              0,
+              16,
+              MediaQuery.paddingOf(context).bottom + 16,
+            ),
             children: [
               _header('外观与终端', '移动端偏好不会覆盖桌面端专属布局字段'),
               Card(
