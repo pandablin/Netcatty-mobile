@@ -45,7 +45,7 @@ class _NetcattyAppState extends ConsumerState<NetcattyApp>
   }
 
   /// Tapping the Dynamic Island / Lock Screen activity opens
-  /// netcatty:///session/<id>: show that terminal. This observer is
+  /// `netcatty:///session/<id>`: show that terminal. This observer is
   /// registered before MaterialApp's, and the app has no named routes, so
   /// every incoming link (also ssh:// ones) is consumed here and never
   /// reaches the Navigator.
