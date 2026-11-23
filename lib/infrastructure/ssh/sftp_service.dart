@@ -29,6 +29,21 @@ class RemoteEntry {
   final int? unixMode;
 }
 
+/// A server-provided entry name must be one path component, not a path.
+/// SFTP servers are untrusted even though real POSIX filenames cannot contain
+/// '/'. Check again at transfer boundaries for other sources and recursive
+/// listings, before a target path or temporary filename is constructed.
+void validateTransferEntryName(String name) {
+  if (name.isEmpty ||
+      name == '.' ||
+      name == '..' ||
+      name.contains('\u0000') ||
+      name.contains('/') ||
+      name.contains('\\')) {
+    throw const FormatException('文件名包含不安全的路径，已停止传输');
+  }
+}
+
 int? parseUnixPermissions(String value) {
   final normalized = value.trim();
   if (!RegExp(r'^[0-7]{3,4}$').hasMatch(normalized)) return null;
@@ -366,6 +381,7 @@ class SftpService extends FileTransferService {
             item.filename != '..' &&
             !item.filename.endsWith('.netcatty-part'))
         .map((item) {
+      validateTransferEntryName(item.filename);
       final fullPath = joinPath(path, item.filename);
       final modified = item.attr.modifyTime;
       return RemoteEntry(
@@ -673,6 +689,7 @@ Future<int> calculateTransferSize(
   TransferCancellationToken? cancellationToken,
 }) async {
   cancellationToken?.throwIfCancelled();
+  validateTransferEntryName(entry.name);
   if (!entry.isDirectory) return entry.size;
   var total = 0;
   for (final child in await source.list(entry.path)) {
@@ -713,6 +730,7 @@ Future<int> transferEntry(
   bool resume = true,
 }) async {
   cancellationToken?.throwIfCancelled();
+  validateTransferEntryName(entry.name);
   final targetPath = target.joinPath(targetDirectory, entry.name);
   final separator = source.isLocal ? Platform.pathSeparator : '/';
   if (sameTransferStorage(source, target) &&
@@ -725,6 +743,7 @@ Future<int> transferEntry(
 
   Future<void> copy(RemoteEntry current, String directory) async {
     cancellationToken?.throwIfCancelled();
+    validateTransferEntryName(current.name);
     final currentTargetPath = target.joinPath(directory, current.name);
     if (current.isDirectory) {
       await target.ensureDirectory(currentTargetPath);

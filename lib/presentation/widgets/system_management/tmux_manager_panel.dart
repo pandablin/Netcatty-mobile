@@ -8,6 +8,7 @@ import '../../../domain/models/host.dart';
 import '../../../domain/models/system_management.dart';
 import '../../../infrastructure/ssh/ssh_service.dart';
 import '../../../infrastructure/ssh/system_management_service.dart';
+import '../snippet_group_list.dart';
 
 class TmuxManagerPanel extends StatefulWidget {
   const TmuxManagerPanel({
@@ -116,27 +117,19 @@ class _TmuxManagerPanelState extends State<TmuxManagerPanel> {
                 ),
                 const SizedBox(height: 12),
                 if (widget.snippets.isNotEmpty) ...[
-                  DropdownButtonFormField<CommandSnippet>(
-                    initialValue: selectedSnippet,
-                    isExpanded: true,
-                    decoration: LInputDecoration(
-                      labelText: '从命令片段选择（可选）',
-                    ),
-                    items: widget.snippets
-                        .map(
-                          (snippet) => DropdownMenuItem(
-                            value: snippet,
-                            child: LText(
-                              snippet.label,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        )
-                        .toList(growable: false),
-                    onChanged: (snippet) {
+                  OutlinedButton.icon(
+                    key: const ValueKey('tmux-choose-snippet'),
+                    icon: const Icon(Icons.folder_outlined),
+                    label: selectedSnippet == null
+                        ? const LText('从命令片段选择（可选）')
+                        : Text(selectedSnippet!.label,
+                            maxLines: 1, overflow: TextOverflow.ellipsis),
+                    onPressed: () async {
+                      final snippet = await showGroupedSnippetPicker(context,
+                          snippets: widget.snippets);
+                      if (snippet == null || !context.mounted) return;
                       setDialogState(() => selectedSnippet = snippet);
-                      if (snippet != null) command.text = snippet.command;
+                      command.text = snippet.command;
                     },
                   ),
                   const SizedBox(height: 12),

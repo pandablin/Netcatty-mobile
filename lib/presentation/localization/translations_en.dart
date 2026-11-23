@@ -1,4 +1,18 @@
 const englishTranslations = <String, String>{
+  '文件名包含不安全的路径，已停止传输': 'The filename contains an unsafe path. Transfer stopped',
+  '云端未找到 netcatty-vault.json，且本机没有可同步数据。':
+      'No netcatty-vault.json was found in the cloud, and this device has no data to sync. ',
+  '未上传空保险库，请检查云同步目录或地址，并先在桌面端上传数据':
+      'No empty vault was uploaded. Check the sync folder or address, and upload your data from desktop first',
+  '同步文件的密钥推导次数无效或超出安全限制':
+      'The sync file has an invalid key-derivation work factor or exceeds the safety limit',
+  '同步文件缺少有效的 salt 或 IV': 'The sync file is missing a valid salt or IV',
+  '同步文件的 salt 或 IV 长度无效': 'The sync file has an invalid salt or IV length',
+  '云端保险库为空': 'The cloud vault is empty',
+  '选择分组': 'Select group',
+  '输入新分组或选择已有分组': 'Enter a new group or select an existing one',
+  '该分组暂无片段': 'No snippets in this group',
+  '选择命令片段': 'Select command snippet',
   '每个主题都有配套的浅色和深色版本，以及终端配色':
       'Every theme has matching light and dark versions and terminal colours',
   '按名称排序': 'Sort by name',
@@ -174,14 +188,14 @@ const englishTranslations = <String, String>{
   '背景图片无法读取，请重新选择': 'The background image cannot be read. Choose it again',
   r'选择背景图片失败：$error': r'Unable to choose background image: $error',
   '无法读取所选背景图片': 'Unable to read the selected background image',
-  "topLeft' => '左上": 'top left',
-  "topCenter' => '顶部居中": 'top center',
-  "topRight' => '右上": 'top right',
-  "centerLeft' => '左侧居中": 'center left',
-  "centerRight' => '右侧居中": 'center right',
-  "bottomLeft' => '左下": 'bottom left',
-  "bottomCenter' => '底部居中": 'bottom center',
-  "bottomRight' => '右下": 'bottom right',
+  '左上': 'Top left',
+  '顶部居中': 'Top center',
+  '右上': 'Top right',
+  '左侧居中': 'Center left',
+  '右侧居中': 'Center right',
+  '左下': 'Bottom left',
+  '底部居中': 'Bottom center',
+  '右下': 'Bottom right',
   '居中': 'Center',
   '终端字号': 'Terminal font size',
   '保存外观设置': 'Save appearance',
@@ -290,10 +304,10 @@ const englishTranslations = <String, String>{
   "low' => '低": 'low reasoning effort',
   "medium' => '中": 'medium reasoning effort',
   "high' => '高": 'high reasoning effort',
-  "minimal' => '思考：极低": 'minimal reasoning effort',
-  "low' => '思考：低": 'low reasoning effort',
-  "medium' => '思考：中": 'medium reasoning effort',
-  "high' => '思考：高": 'high reasoning effort',
+  '思考：极低': 'Reasoning: minimal',
+  '思考：低': 'Reasoning: low',
+  '思考：中': 'Reasoning: medium',
+  '思考：高': 'Reasoning: high',
   '思考：模型默认': 'Reasoning: model default',
   '添加': 'Add',
   '添加模型': 'Add model',
@@ -628,6 +642,35 @@ const englishTranslations = <String, String>{
 /// Ordered fragments cover dynamic values and infrastructure errors that are
 /// ultimately rendered by a localized text widget.
 const englishReplacements = <(String, String)>[
+  (
+    '文件名包含不安全的路径，已停止传输',
+    'The filename contains an unsafe path. Transfer stopped'
+  ),
+  ('云端响应超过安全大小限制（', 'The cloud response exceeds the safety limit ('),
+  (' 字节），已停止读取', ' bytes); reading stopped'),
+  (
+    '云端未找到 netcatty-vault.json，且本机没有可同步数据。',
+    'No netcatty-vault.json was found in the cloud, and this device has no data to sync. '
+  ),
+  (
+    '未上传空保险库，请检查云同步目录或地址，并先在桌面端上传数据',
+    'No empty vault was uploaded. Check the sync folder or address, and upload your data from desktop first'
+  ),
+  (
+    '同步文件的密钥推导次数无效或超出安全限制',
+    'The sync file has an invalid key-derivation work factor or exceeds the safety limit'
+  ),
+  ('同步文件缺少有效的 salt 或 IV', 'The sync file is missing a valid salt or IV'),
+  ('同步文件的 salt 或 IV 长度无效', 'The sync file has an invalid salt or IV length'),
+  ('首次上传完成；本机现有：', 'Initial upload complete; on this device: '),
+  ('云端读取：', 'Read from cloud: '),
+  ('；本机现有：', '; on this device: '),
+  (' 台主机、', ' hosts, '),
+  (' 条脚本、', ' scripts, '),
+  (' 个密钥', ' keys'),
+  ('云端保险库为空；', 'The cloud vault is empty; '),
+  ('云端保险库为空', 'The cloud vault is empty'),
+  ('同步完成；', 'Sync complete; '),
   (
     'Gist 元数据过大（修订历史或其他文件太多），请新建一个只存放保险库的 Gist',
     'The gist metadata is too large (too many revisions or other files). Create a new gist that only holds the vault'

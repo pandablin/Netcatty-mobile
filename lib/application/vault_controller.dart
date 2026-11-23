@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../domain/models/host.dart';
+import '../domain/models/snippet_group.dart';
 import '../domain/models/vault.dart';
 import '../infrastructure/storage/vault_repository.dart';
 
@@ -168,7 +169,15 @@ class VaultController extends StateNotifier<VaultState> {
     } else {
       snippets[index] = snippet;
     }
-    await _replaceMetadata(vault.copyWith(snippets: snippets));
+    final package = snippet.packageName;
+    await _replaceMetadata(vault.copyWith(
+      snippets: snippets,
+      extras: {
+        ...vault.extras,
+        if (package != null && !vault.snippetPackages.contains(package))
+          'snippetPackages': [...vault.snippetPackages, package],
+      },
+    ));
   }
 
   Future<void> deleteSnippet(String id) async {

@@ -10,7 +10,9 @@ const _entityCollections = <String>[
   'snippets',
   'notes',
   'portForwardingRules',
+  'browserBookmarks',
   'groupConfigs',
+  'monitorPanels',
 ];
 
 const _stringCollections = <String>[

@@ -13,7 +13,9 @@ const _entityCollections = <String>[
   'snippets',
   'notes',
   'portForwardingRules',
+  'browserBookmarks',
   'groupConfigs',
+  'monitorPanels',
 ];
 
 const _stringCollections = <String>[
@@ -29,7 +31,9 @@ const _optionalCollections = <String>{
   'notes',
   'noteGroups',
   'portForwardingRules',
+  'browserBookmarks',
   'groupConfigs',
+  'monitorPanels',
 };
 
 const _allCollections = <String>[

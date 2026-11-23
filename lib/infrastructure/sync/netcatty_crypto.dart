@@ -23,6 +23,10 @@ class SyncedVaultFile {
 
 class NetcattyCrypto {
   static const iterations = 600000;
+  // The work factor is outside the authenticated ciphertext. Bound it before
+  // starting PBKDF2 so a corrupted/untrusted cloud file cannot pin a phone's
+  // CPU indefinitely. Existing desktop/mobile files use 600,000 rounds.
+  static const maxDecryptIterations = 2000000;
   static const saltLength = 32;
   static const ivLength = 12;
   static const tagLength = 16;
@@ -129,16 +133,31 @@ class NetcattyCrypto {
         file.meta['kdf'] != 'PBKDF2') {
       throw const FormatException('Unsupported Netcatty encryption format');
     }
-    final salt = base64Decode(file.meta['salt'] as String);
-    final iv = base64Decode(file.meta['iv'] as String);
+    final rawRounds = file.meta['kdfIterations'];
+    if (rawRounds != null &&
+        (rawRounds is! int ||
+            rawRounds < 1 ||
+            rawRounds > maxDecryptIterations)) {
+      throw const FormatException('同步文件的密钥推导次数无效或超出安全限制');
+    }
+    final rounds = rawRounds as int? ?? iterations;
+    final saltValue = file.meta['salt'];
+    final ivValue = file.meta['iv'];
+    if (saltValue is! String || ivValue is! String) {
+      throw const FormatException('同步文件缺少有效的 salt 或 IV');
+    }
+    final salt = base64Decode(saltValue);
+    final iv = base64Decode(ivValue);
+    if (salt.length != saltLength || iv.length != ivLength) {
+      throw const FormatException('同步文件的 salt 或 IV 长度无效');
+    }
     final payload = file.payload;
-    final rounds = (file.meta['kdfIterations'] as num?)?.toInt() ?? iterations;
+    final body = base64Decode(payload);
+    if (body.length <= tagLength) {
+      throw const FormatException('Encrypted payload is truncated');
+    }
     final key = await _deriveKey(password, salt, rounds);
     return Isolate.run(() async {
-      final body = base64Decode(payload);
-      if (body.length <= tagLength) {
-        throw const FormatException('Encrypted payload is truncated');
-      }
       final box = SecretBox(
         body.sublist(0, body.length - tagLength),
         nonce: iv,

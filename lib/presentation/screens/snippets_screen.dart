@@ -1,13 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:netcatty_mobile/presentation/localization/localized_widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:uuid/uuid.dart';
 
 import '../../application/session_controller.dart';
 import '../../application/vault_controller.dart';
 import '../../domain/models/host.dart';
+import '../../domain/models/snippet_group.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/glass.dart';
+import '../widgets/snippet_edit_sheet.dart';
+import '../widgets/snippet_group_list.dart';
 
 class SnippetsScreen extends ConsumerWidget {
   const SnippetsScreen({super.key});
@@ -16,6 +18,11 @@ class SnippetsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final vault = ref.watch(vaultControllerProvider).data;
     final snippets = vault?.snippets ?? const <CommandSnippet>[];
+    final packages = groupCommandSnippets(snippets,
+            packages: vault?.snippetPackages ?? const [])
+        .map((group) => group.packageName)
+        .whereType<String>()
+        .toList(growable: false);
     return SafeArea(
       // The list scrolls under the floating glass tab bar.
       bottom: false,
@@ -32,7 +39,7 @@ class SnippetsScreen extends ConsumerWidget {
             ),
           ],
         ),
-        body: snippets.isEmpty
+        body: snippets.isEmpty && packages.isEmpty
             ? EmptyState(
                 icon: Icons.code,
                 title: '还没有命令片段',
@@ -43,90 +50,86 @@ class SnippetsScreen extends ConsumerWidget {
                   label: const LText('新建片段'),
                 ),
               )
-            : ListView.separated(
+            : SnippetGroupList(
+                snippets: snippets,
+                packages: packages,
                 padding: EdgeInsets.fromLTRB(
                   12,
                   12,
                   12,
                   MediaQuery.paddingOf(context).bottom + 12,
                 ),
-                itemCount: snippets.length,
-                separatorBuilder: (_, __) => const SizedBox(height: 8),
-                itemBuilder: (_, index) {
-                  final snippet = snippets[index];
-                  return Card(
-                    child: ListTile(
-                      leading: const Icon(Icons.code),
-                      title: LText(snippet.label),
-                      subtitle: LText(
-                        snippet.command,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontFamily: 'monospace'),
-                      ),
-                      onTap: () {
-                        final active =
-                            ref.read(sessionControllerProvider).active;
-                        if (active == null) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: LText('请先建立终端会话')),
-                          );
-                        } else {
-                          ref
-                              .read(sessionControllerProvider.notifier)
-                              .send(snippet.command, enter: snippet.autoRun);
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: LText('已发送到 ${active.host.label}'),
-                            ),
-                          );
+                itemBuilder: (_, snippet) {
+                  return ListTile(
+                    leading: const Icon(Icons.code),
+                    title: LText(snippet.label),
+                    subtitle: LText(
+                      snippet.command,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontFamily: 'monospace'),
+                    ),
+                    onTap: () {
+                      final active = ref.read(sessionControllerProvider).active;
+                      if (active == null) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: LText('请先建立终端会话')),
+                        );
+                      } else {
+                        ref
+                            .read(sessionControllerProvider.notifier)
+                            .send(snippet.command, enter: snippet.autoRun);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: LText('已发送到 ${active.host.label}'),
+                          ),
+                        );
+                      }
+                    },
+                    trailing: PopupMenuButton<_SnippetAction>(
+                      key: ValueKey('snippet-actions-${snippet.id}'),
+                      tooltip: localized('片段操作'),
+                      onSelected: (action) async {
+                        switch (action) {
+                          case _SnippetAction.edit:
+                            await _edit(context, ref, snippet);
+                            break;
+                          case _SnippetAction.delete:
+                            await _delete(context, ref, snippet);
+                            break;
                         }
                       },
-                      trailing: PopupMenuButton<_SnippetAction>(
-                        key: ValueKey('snippet-actions-${snippet.id}'),
-                        tooltip: localized('片段操作'),
-                        onSelected: (action) async {
-                          switch (action) {
-                            case _SnippetAction.edit:
-                              await _edit(context, ref, snippet);
-                              break;
-                            case _SnippetAction.delete:
-                              await _delete(context, ref, snippet);
-                              break;
-                          }
-                        },
-                        itemBuilder: (context) => [
-                          const PopupMenuItem(
-                            value: _SnippetAction.edit,
-                            child: Row(
-                              children: [
-                                Icon(Icons.edit_outlined),
-                                SizedBox(width: 12),
-                                LText('编辑'),
-                              ],
-                            ),
+                      itemBuilder: (context) => [
+                        const PopupMenuItem(
+                          value: _SnippetAction.edit,
+                          child: Row(
+                            children: [
+                              Icon(Icons.edit_outlined),
+                              SizedBox(width: 12),
+                              LText('编辑'),
+                            ],
                           ),
-                          PopupMenuItem(
-                            key: ValueKey('delete-snippet-${snippet.id}'),
-                            value: _SnippetAction.delete,
-                            child: Row(
-                              children: [
-                                Icon(
-                                  Icons.delete_outline,
+                        ),
+                        PopupMenuItem(
+                          key: ValueKey('delete-snippet-${snippet.id}'),
+                          value: _SnippetAction.delete,
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.delete_outline,
+                                color: Theme.of(context).colorScheme.error,
+                              ),
+                              const SizedBox(width: 12),
+                              LText(
+                                '删除',
+                                style: TextStyle(
                                   color: Theme.of(context).colorScheme.error,
                                 ),
-                                const SizedBox(width: 12),
-                                LText(
-                                  '删除',
-                                  style: TextStyle(
-                                    color: Theme.of(context).colorScheme.error,
-                                  ),
-                                ),
-                              ],
-                            ),
+                              ),
+                            ],
                           ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
                   );
                 },
@@ -140,73 +143,18 @@ class SnippetsScreen extends ConsumerWidget {
     WidgetRef ref, [
     CommandSnippet? snippet,
   ]) async {
-    final label = TextEditingController(text: snippet?.label);
-    final command = TextEditingController(text: snippet?.command);
-    var autoRun = snippet?.autoRun ?? true;
+    final vault = ref.read(vaultControllerProvider).data;
+    final packages = groupCommandSnippets(vault?.snippets ?? const [],
+            packages: vault?.snippetPackages ?? const [])
+        .map((group) => group.packageName)
+        .whereType<String>()
+        .toList(growable: false);
     final result = await showModalBottomSheet<CommandSnippet>(
       context: context,
       isScrollControlled: true,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setState) => Padding(
-          padding: EdgeInsets.fromLTRB(
-            16,
-            20,
-            16,
-            MediaQuery.viewInsetsOf(context).bottom + 20,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              LText(
-                snippet == null ? '新建命令片段' : '编辑命令片段',
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: label,
-                decoration: LInputDecoration(labelText: '名称'),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: command,
-                minLines: 4,
-                maxLines: 10,
-                style: const TextStyle(fontFamily: 'monospace'),
-                decoration: LInputDecoration(labelText: '命令'),
-              ),
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const LText('发送后立即执行'),
-                value: autoRun,
-                onChanged: (value) => setState(() => autoRun = value),
-              ),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton(
-                  onPressed: () {
-                    if (label.text.trim().isEmpty ||
-                        command.text.trim().isEmpty) {
-                      return;
-                    }
-                    Navigator.pop(
-                      context,
-                      CommandSnippet({
-                        ...?snippet?.data,
-                        'id': snippet?.id ?? const Uuid().v4(),
-                        'label': label.text.trim(),
-                        'command': command.text,
-                        'noAutoRun': !autoRun,
-                        'kind': 'snippet',
-                      }),
-                    );
-                  },
-                  child: const LText('保存'),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
+      useSafeArea: true,
+      builder: (context) =>
+          SnippetEditSheet(snippet: snippet, packages: packages),
     );
     if (result == null) return;
     await ref.read(vaultControllerProvider.notifier).upsertSnippet(result);

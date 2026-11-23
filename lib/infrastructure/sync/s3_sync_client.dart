@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import 'package:http/io_client.dart';
 
 import '../../domain/models/settings.dart';
+import 'bounded_http_client.dart';
 
 class S3ObjectResponse {
   const S3ObjectResponse({
@@ -22,11 +23,15 @@ class S3ObjectResponse {
 /// Requests are signed with AWS Signature Version 4 and work with AWS S3,
 /// MinIO and other compatible object stores.
 class S3SyncClient {
-  S3SyncClient({required http.Client client}) : _client = client;
+  S3SyncClient({
+    required http.Client client,
+    this.maxResponseBytes = 32 * 1024 * 1024,
+  }) : _client = BoundedHttpClient(client, limitFor: (_) => maxResponseBytes);
 
   static const vaultFileName = 'netcatty-vault.json';
 
   final http.Client _client;
+  final int maxResponseBytes;
 
   Future<S3ObjectResponse?> getVault(SyncConnection connection) async {
     final response = await _send(
@@ -108,7 +113,10 @@ class S3SyncClient {
     final native = io.HttpClient()
       ..badCertificateCallback =
           (io.X509Certificate certificate, String host, int port) => true;
-    final insecureClient = IOClient(native);
+    final insecureClient = BoundedHttpClient(
+      IOClient(native),
+      limitFor: (_) => maxResponseBytes,
+    );
     try {
       return http.Response.fromStream(await insecureClient.send(request));
     } finally {

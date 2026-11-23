@@ -1,0 +1,609 @@
+{
+  "hosts": [
+    {
+      "id": "desktop-host",
+      "group": "Servers",
+      "hostname": "fixture.invalid",
+      "label": "Fixture host",
+      "username": "fixture"
+    }
+  ],
+  "keys": [
+    {
+      "id": "desktop-key",
+      "label": "Fixture key",
+      "privateKey": "fixture-only-not-a-real-key"
+    }
+  ],
+  "identities": [],
+  "proxyProfiles": [],
+  "monitorPanels": [
+    {
+      "id": "desktop-monitor",
+      "hostIds": [
+        "desktop-host"
+      ],
+      "name": "Fixture monitor"
+    }
+  ],
+  "snippets": [
+    {
+      "id": "desktop-snippet",
+      "command": "printf fixture",
+      "label": "Fixture snippet",
+      "package": "Tools"
+    }
+  ],
+  "customGroups": [
+    "Servers"
+  ],
+  "snippetPackages": [
+    "Tools"
+  ],
+  "notes": [],
+  "noteGroups": [],
+  "portForwardingRules": [],
+  "browserBookmarks": [
+    {
+      "id": "desktop-bookmark",
+      "name": "Fixture bookmark",
+      "url": "https://example.invalid"
+    }
+  ],
+  "groupConfigs": [],
+  "settings": {
+    "language": "en"
+  },
+  "syncedAt": 100,
+  "convergentSync": {
+    "schemaVersion": 2,
+    "encoding": "materialized-winner-v1",
+    "state": {
+      "vector": {
+        "desktop-fixture": 28
+      },
+      "dotOrigins": {
+        "desktop-fixture": {
+          "1": "[\"entity-field\",\"hosts\",\"desktop-host\",\"group\"]",
+          "2": "[\"entity-field\",\"hosts\",\"desktop-host\",\"hostname\"]",
+          "3": "[\"entity-field\",\"hosts\",\"desktop-host\",\"label\"]",
+          "4": "[\"entity-field\",\"hosts\",\"desktop-host\",\"username\"]",
+          "5": "[\"entity-position\",\"hosts\",\"desktop-host\"]",
+          "6": "[\"entity-presence\",\"hosts\",\"desktop-host\"]",
+          "7": "[\"entity-field\",\"keys\",\"desktop-key\",\"label\"]",
+          "8": "[\"entity-field\",\"keys\",\"desktop-key\",\"privateKey\"]",
+          "9": "[\"entity-position\",\"keys\",\"desktop-key\"]",
+          "10": "[\"entity-presence\",\"keys\",\"desktop-key\"]",
+          "11": "[\"entity-field\",\"snippets\",\"desktop-snippet\",\"command\"]",
+          "12": "[\"entity-field\",\"snippets\",\"desktop-snippet\",\"label\"]",
+          "13": "[\"entity-field\",\"snippets\",\"desktop-snippet\",\"package\"]",
+          "14": "[\"entity-position\",\"snippets\",\"desktop-snippet\"]",
+          "15": "[\"entity-presence\",\"snippets\",\"desktop-snippet\"]",
+          "16": "[\"entity-field\",\"browserBookmarks\",\"desktop-bookmark\",\"name\"]",
+          "17": "[\"entity-field\",\"browserBookmarks\",\"desktop-bookmark\",\"url\"]",
+          "18": "[\"entity-position\",\"browserBookmarks\",\"desktop-bookmark\"]",
+          "19": "[\"entity-presence\",\"browserBookmarks\",\"desktop-bookmark\"]",
+          "20": "[\"entity-field\",\"monitorPanels\",\"desktop-monitor\",\"hostIds\"]",
+          "21": "[\"entity-field\",\"monitorPanels\",\"desktop-monitor\",\"name\"]",
+          "22": "[\"entity-position\",\"monitorPanels\",\"desktop-monitor\"]",
+          "23": "[\"entity-presence\",\"monitorPanels\",\"desktop-monitor\"]",
+          "24": "[\"string-entry-position\",\"customGroups\",\"Servers\"]",
+          "25": "[\"string-entry-presence\",\"customGroups\",\"Servers\"]",
+          "26": "[\"string-entry-position\",\"snippetPackages\",\"Tools\"]",
+          "27": "[\"string-entry-presence\",\"snippetPackages\",\"Tools\"]",
+          "28": "[\"setting\",\"language\"]"
+        }
+      },
+      "hlc": {
+        "wallTime": 100,
+        "logical": 27
+      },
+      "collections": {
+        "browserBookmarks": {
+          "entities": {
+            "desktop-bookmark": {
+              "presence": {
+                "candidates": [
+                  {
+                    "dot": {
+                      "deviceId": "desktop-fixture",
+                      "counter": 19
+                    },
+                    "context": [],
+                    "hlc": {
+                      "wallTime": 100,
+                      "logical": 18
+                    },
+                    "value": true
+                  }
+                ]
+              },
+              "position": {
+                "candidates": [
+                  {
+                    "dot": {
+                      "deviceId": "desktop-fixture",
+                      "counter": 18
+                    },
+                    "context": [],
+                    "hlc": {
+                      "wallTime": 100,
+                      "logical": 17
+                    },
+                    "value": 0
+                  }
+                ]
+              },
+              "fields": {
+                "name": {
+                  "candidates": [
+                    {
+                      "dot": {
+                        "deviceId": "desktop-fixture",
+                        "counter": 16
+                      },
+                      "context": [],
+                      "hlc": {
+                        "wallTime": 100,
+                        "logical": 15
+                      },
+                      "materialized": true
+                    }
+                  ]
+                },
+                "url": {
+                  "candidates": [
+                    {
+                      "dot": {
+                        "deviceId": "desktop-fixture",
+                        "counter": 17
+                      },
+                      "context": [],
+                      "hlc": {
+                        "wallTime": 100,
+                        "logical": 16
+                      },
+                      "materialized": true
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "hosts": {
+          "entities": {
+            "desktop-host": {
+              "presence": {
+                "candidates": [
+                  {
+                    "dot": {
+                      "deviceId": "desktop-fixture",
+                      "counter": 6
+                    },
+                    "context": [],
+                    "hlc": {
+                      "wallTime": 100,
+                      "logical": 5
+                    },
+                    "value": true
+                  }
+                ]
+              },
+              "position": {
+                "candidates": [
+                  {
+                    "dot": {
+                      "deviceId": "desktop-fixture",
+                      "counter": 5
+                    },
+                    "context": [],
+                    "hlc": {
+                      "wallTime": 100,
+                      "logical": 4
+                    },
+                    "value": 0
+                  }
+                ]
+              },
+              "fields": {
+                "group": {
+                  "candidates": [
+                    {
+                      "dot": {
+                        "deviceId": "desktop-fixture",
+                        "counter": 1
+                      },
+                      "context": [],
+                      "hlc": {
+                        "wallTime": 100,
+                        "logical": 0
+                      },
+                      "materialized": true
+                    }
+                  ]
+                },
+                "hostname": {
+                  "candidates": [
+                    {
+                      "dot": {
+                        "deviceId": "desktop-fixture",
+                        "counter": 2
+                      },
+                      "context": [],
+                      "hlc": {
+                        "wallTime": 100,
+                        "logical": 1
+                      },
+                      "materialized": true
+                    }
+                  ]
+                },
+                "label": {
+                  "candidates": [
+                    {
+                      "dot": {
+                        "deviceId": "desktop-fixture",
+                        "counter": 3
+                      },
+                      "context": [],
+                      "hlc": {
+                        "wallTime": 100,
+                        "logical": 2
+                      },
+                      "materialized": true
+                    }
+                  ]
+                },
+                "username": {
+                  "candidates": [
+                    {
+                      "dot": {
+                        "deviceId": "desktop-fixture",
+                        "counter": 4
+                      },
+                      "context": [],
+                      "hlc": {
+                        "wallTime": 100,
+                        "logical": 3
+                      },
+                      "materialized": true
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "keys": {
+          "entities": {
+            "desktop-key": {
+              "presence": {
+                "candidates": [
+                  {
+                    "dot": {
+                      "deviceId": "desktop-fixture",
+                      "counter": 10
+                    },
+                    "context": [],
+                    "hlc": {
+                      "wallTime": 100,
+                      "logical": 9
+                    },
+                    "value": true
+                  }
+                ]
+              },
+              "position": {
+                "candidates": [
+                  {
+                    "dot": {
+                      "deviceId": "desktop-fixture",
+                      "counter": 9
+                    },
+                    "context": [],
+                    "hlc": {
+                      "wallTime": 100,
+                      "logical": 8
+                    },
+                    "value": 0
+                  }
+                ]
+              },
+              "fields": {
+                "label": {
+                  "candidates": [
+                    {
+                      "dot": {
+                        "deviceId": "desktop-fixture",
+                        "counter": 7
+                      },
+                      "context": [],
+                      "hlc": {
+                        "wallTime": 100,
+                        "logical": 6
+                      },
+                      "materialized": true
+                    }
+                  ]
+                },
+                "privateKey": {
+                  "candidates": [
+                    {
+                      "dot": {
+                        "deviceId": "desktop-fixture",
+                        "counter": 8
+                      },
+                      "context": [],
+                      "hlc": {
+                        "wallTime": 100,
+                        "logical": 7
+                      },
+                      "materialized": true
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "monitorPanels": {
+          "entities": {
+            "desktop-monitor": {
+              "presence": {
+                "candidates": [
+                  {
+                    "dot": {
+                      "deviceId": "desktop-fixture",
+                      "counter": 23
+                    },
+                    "context": [],
+                    "hlc": {
+                      "wallTime": 100,
+                      "logical": 22
+                    },
+                    "value": true
+                  }
+                ]
+              },
+              "position": {
+                "candidates": [
+                  {
+                    "dot": {
+                      "deviceId": "desktop-fixture",
+                      "counter": 22
+                    },
+                    "context": [],
+                    "hlc": {
+                      "wallTime": 100,
+                      "logical": 21
+                    },
+                    "value": 0
+                  }
+                ]
+              },
+              "fields": {
+                "hostIds": {
+                  "candidates": [
+                    {
+                      "dot": {
+                        "deviceId": "desktop-fixture",
+                        "counter": 20
+                      },
+                      "context": [],
+                      "hlc": {
+                        "wallTime": 100,
+                        "logical": 19
+                      },
+                      "materialized": true
+                    }
+                  ]
+                },
+                "name": {
+                  "candidates": [
+                    {
+                      "dot": {
+                        "deviceId": "desktop-fixture",
+                        "counter": 21
+                      },
+                      "context": [],
+                      "hlc": {
+                        "wallTime": 100,
+                        "logical": 20
+                      },
+                      "materialized": true
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "snippets": {
+          "entities": {
+            "desktop-snippet": {
+              "presence": {
+                "candidates": [
+                  {
+                    "dot": {
+                      "deviceId": "desktop-fixture",
+                      "counter": 15
+                    },
+                    "context": [],
+                    "hlc": {
+                      "wallTime": 100,
+                      "logical": 14
+                    },
+                    "value": true
+                  }
+                ]
+              },
+              "position": {
+                "candidates": [
+                  {
+                    "dot": {
+                      "deviceId": "desktop-fixture",
+                      "counter": 14
+                    },
+                    "context": [],
+                    "hlc": {
+                      "wallTime": 100,
+                      "logical": 13
+                    },
+                    "value": 0
+                  }
+                ]
+              },
+              "fields": {
+                "command": {
+                  "candidates": [
+                    {
+                      "dot": {
+                        "deviceId": "desktop-fixture",
+                        "counter": 11
+                      },
+                      "context": [],
+                      "hlc": {
+                        "wallTime": 100,
+                        "logical": 10
+                      },
+                      "materialized": true
+                    }
+                  ]
+                },
+                "label": {
+                  "candidates": [
+                    {
+                      "dot": {
+                        "deviceId": "desktop-fixture",
+                        "counter": 12
+                      },
+                      "context": [],
+                      "hlc": {
+                        "wallTime": 100,
+                        "logical": 11
+                      },
+                      "materialized": true
+                    }
+                  ]
+                },
+                "package": {
+                  "candidates": [
+                    {
+                      "dot": {
+                        "deviceId": "desktop-fixture",
+                        "counter": 13
+                      },
+                      "context": [],
+                      "hlc": {
+                        "wallTime": 100,
+                        "logical": 12
+                      },
+                      "materialized": true
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "settings": {
+        "/language": {
+          "candidates": [
+            {
+              "dot": {
+                "deviceId": "desktop-fixture",
+                "counter": 28
+              },
+              "context": [],
+              "hlc": {
+                "wallTime": 100,
+                "logical": 27
+              },
+              "materialized": true
+            }
+          ]
+        }
+      },
+      "stringCollections": {
+        "customGroups": {
+          "entries": {
+            "Servers": {
+              "presence": {
+                "candidates": [
+                  {
+                    "dot": {
+                      "deviceId": "desktop-fixture",
+                      "counter": 25
+                    },
+                    "context": [],
+                    "hlc": {
+                      "wallTime": 100,
+                      "logical": 24
+                    },
+                    "value": true
+                  }
+                ]
+              },
+              "position": {
+                "candidates": [
+                  {
+                    "dot": {
+                      "deviceId": "desktop-fixture",
+                      "counter": 24
+                    },
+                    "context": [],
+                    "hlc": {
+                      "wallTime": 100,
+                      "logical": 23
+                    },
+                    "value": 0
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "snippetPackages": {
+          "entries": {
+            "Tools": {
+              "presence": {
+                "candidates": [
+                  {
+                    "dot": {
+                      "deviceId": "desktop-fixture",
+                      "counter": 27
+                    },
+                    "context": [],
+                    "hlc": {
+                      "wallTime": 100,
+                      "logical": 26
+                    },
+                    "value": true
+                  }
+                ]
+              },
+              "position": {
+                "candidates": [
+                  {
+                    "dot": {
+                      "deviceId": "desktop-fixture",
+                      "counter": 26
+                    },
+                    "context": [],
+                    "hlc": {
+                      "wallTime": 100,
+                      "logical": 25
+                    },
+                    "value": 0
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

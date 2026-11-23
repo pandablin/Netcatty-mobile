@@ -8,6 +8,7 @@ import 'package:uuid/uuid.dart';
 import '../../domain/models/settings.dart';
 import '../../domain/models/vault.dart';
 import '../storage/vault_repository.dart';
+import 'bounded_http_client.dart';
 import 'convergent_sync_adapter.dart';
 import 'netcatty_crypto.dart';
 import 's3_sync_client.dart';
@@ -72,7 +73,13 @@ class CloudSyncService {
     this.maxResponseBytes = 32 * 1024 * 1024,
     String? deviceId,
     String? appVersion,
-  })  : _client = client ?? http.Client(),
+  })  : _client = BoundedHttpClient(
+          client ?? http.Client(),
+          limitFor: (uri) =>
+              uri.host == 'api.github.com' && uri.path.startsWith('/gists')
+                  ? maxGistResponseBytes
+                  : maxResponseBytes,
+        ),
         _ownsClient = client == null,
         _injectedDeviceId = deviceId,
         _injectedAppVersion = appVersion;
@@ -127,8 +134,9 @@ class CloudSyncService {
     );
   }
 
-  Future<void> testS3Connection(SyncConnection connection) =>
-      _withTimeout(S3SyncClient(client: _client).testConnection(connection));
+  Future<void> testS3Connection(SyncConnection connection) => _withTimeout(
+      S3SyncClient(client: _client, maxResponseBytes: maxResponseBytes)
+          .testConnection(connection));
 
   Future<CloudSyncResult> _synchronize(VaultData local,
       {required bool overrideShrink}) async {
@@ -154,6 +162,10 @@ class CloudSyncService {
       final remote = await _download(setup.connection);
       if (remote == null && base != null) {
         throw StateError('已同步的云端保险库暂时不可见，已停止写入；请检查存储路径或权限后重试');
+      }
+      if (remote == null && cloudSyncPayloadsEqual(local, VaultData.empty())) {
+        throw StateError('云端未找到 netcatty-vault.json，且本机没有可同步数据。'
+            '未上传空保险库，请检查云同步目录或地址，并先在桌面端上传数据');
       }
       if (remote != null) _assertSupportedSyncSchema(remote.file);
       final downloaded = remote == null
@@ -287,7 +299,8 @@ class CloudSyncService {
         final applied = retainLocalDeviceData(verifiedVault, local);
         return CloudSyncResult(
           vault: applied,
-          message: '同步完成',
+          message: _syncMessage(
+              downloaded: remote == null ? null : downloaded, applied: applied),
           validateBeforeApply: () =>
               _assertSetupUnchanged(setup.connection, setup.password),
           acknowledge: () async {
@@ -308,6 +321,18 @@ class CloudSyncService {
       }
     }
     throw const CloudSyncConflictException();
+  }
+
+  String _syncMessage(
+      {required VaultData? downloaded, required VaultData applied}) {
+    String counts(VaultData vault) => '${vault.hosts.length} 台主机、'
+        '${vault.snippets.length} 条脚本、${vault.keys.length} 个密钥';
+    if (downloaded == null) {
+      return '首次上传完成；本机现有：${counts(applied)}';
+    }
+    final cloudIsEmpty = cloudSyncPayloadsEqual(downloaded, VaultData.empty());
+    return '${cloudIsEmpty ? '云端保险库为空' : '同步完成'}；'
+        '云端读取：${counts(downloaded)}；本机现有：${counts(applied)}';
   }
 
   Future<void> _assertSetupUnchanged(
@@ -381,7 +406,8 @@ class CloudSyncService {
     }
     if (connection.type == SyncProviderType.s3) {
       final response = await _withTimeout(
-        S3SyncClient(client: _client).getVault(connection),
+        S3SyncClient(client: _client, maxResponseBytes: maxResponseBytes)
+            .getVault(connection),
       );
       if (response == null) return null;
       final bytes = utf8.encode(response.body);
@@ -473,7 +499,8 @@ class CloudSyncService {
   }) async {
     final body = jsonEncode(file.toJson());
     if (connection.type == SyncProviderType.s3) {
-      final s3 = S3SyncClient(client: _client);
+      final s3 =
+          S3SyncClient(client: _client, maxResponseBytes: maxResponseBytes);
       if (expectedRevision != null) {
         final current = await _withTimeout(s3.getVault(connection));
         if (current?.revision != expectedRevision) {

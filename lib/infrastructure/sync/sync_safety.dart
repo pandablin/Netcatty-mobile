@@ -25,7 +25,9 @@ void assertSafeSyncShrink(
     'snippets',
     'notes',
     'portForwardingRules',
+    'browserBookmarks',
     'groupConfigs',
+    'monitorPanels',
     'customGroups',
     'snippetPackages',
     'noteGroups'

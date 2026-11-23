@@ -5,6 +5,52 @@ import 'package:netcatty_mobile/domain/models/vault.dart';
 import 'package:netcatty_mobile/infrastructure/sync/netcatty_crypto.dart';
 
 void main() {
+  group('untrusted envelope validation before key derivation', () {
+    SyncedVaultFile envelope(Map<String, dynamic> overrides) => SyncedVaultFile(
+          meta: {
+            'algorithm': 'AES-256-GCM',
+            'kdf': 'PBKDF2',
+            'salt': base64Encode(List<int>.filled(32, 1)),
+            'iv': base64Encode(List<int>.filled(12, 2)),
+            'kdfIterations': NetcattyCrypto.iterations,
+            ...overrides,
+          },
+          payload: base64Encode(List<int>.filled(32, 3)),
+        );
+
+    for (final rounds in <Object>[
+      0,
+      -1,
+      600000.5,
+      '600000',
+      NetcattyCrypto.maxDecryptIterations + 1,
+      9223372036854775807,
+    ]) {
+      test('rejects invalid work factor $rounds promptly', () async {
+        await expectLater(
+          NetcattyCrypto.decrypt(envelope({'kdfIterations': rounds}), 'test')
+              .timeout(const Duration(seconds: 1)),
+          throwsA(isA<FormatException>()),
+        );
+      });
+    }
+
+    for (final invalid in <Map<String, dynamic>>[
+      {'salt': base64Encode(List<int>.filled(31, 1))},
+      {'iv': base64Encode(List<int>.filled(11, 2))},
+      {'salt': null},
+      {'iv': 42},
+    ]) {
+      test('rejects invalid salt or IV $invalid before PBKDF2', () async {
+        await expectLater(
+          NetcattyCrypto.decrypt(envelope(invalid), 'test')
+              .timeout(const Duration(seconds: 1)),
+          throwsA(isA<FormatException>()),
+        );
+      });
+    }
+  });
+
   test(
     'decrypts a desktop-compatible Node/WebCrypto AES-GCM fixture',
     () async {

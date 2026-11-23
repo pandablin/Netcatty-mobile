@@ -261,8 +261,6 @@ class TerminalViewState extends State<TerminalView> {
 
   late final void Function(String, String) _clipboardStore = _storeClipboard;
 
-  late final Future<String?> Function(String) _clipboardQuery = _queryClipboard;
-
   RenderTerminal get renderTerminal {
     final context = _viewportKey.currentContext;
     if (context == null) {
@@ -369,28 +367,22 @@ class TerminalViewState extends State<TerminalView> {
   }
 
   void _installClipboardHandlers(Terminal terminal) {
+    // Do not answer remote OSC 52 queries from the system clipboard. Any
+    // terminal output, including a displayed file, can issue a query and its
+    // response is sent back to the remote program. Applications may opt in
+    // explicitly by supplying Terminal.onClipboardQuery themselves.
     terminal.onClipboardStore ??= _clipboardStore;
-    terminal.onClipboardQuery ??= _clipboardQuery;
   }
 
   void _removeClipboardHandlers(Terminal terminal) {
     if (terminal.onClipboardStore == _clipboardStore) {
       terminal.onClipboardStore = null;
     }
-    if (terminal.onClipboardQuery == _clipboardQuery) {
-      terminal.onClipboardQuery = null;
-    }
   }
 
   void _storeClipboard(String selector, String text) {
     if (!_focusNode.hasFocus) return;
     unawaited(Clipboard.setData(ClipboardData(text: text)));
-  }
-
-  Future<String?> _queryClipboard(String selector) async {
-    if (!_focusNode.hasFocus) return null;
-    final data = await Clipboard.getData(Clipboard.kTextPlain);
-    return data?.text;
   }
 
   int? _resolveColorQuery(int code, int? index) {
