@@ -266,7 +266,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               key: const ValueKey('settings-language'),
               icon: Icons.translate,
               title: '语言',
-              value: language == 'en' ? 'English' : '简体中文',
+              value: _languageLabel(language),
               section: _SettingsSection.language,
             ),
           ]),
@@ -687,14 +687,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ]),
         _SettingsSection.language => _page('语言', [
             _group([
-              for (final (code, label) in const [
-                ('zh-CN', '简体中文'),
-                ('en', 'English'),
-              ])
+              for (final code in const ['zh-CN', 'en'])
                 ListTile(
                   key: ValueKey('language-$code'),
                   minTileHeight: 52,
-                  title: Text(label),
+                  title: Text(_languageLabel(code)),
                   trailing: language == code
                       ? Icon(
                           Icons.check,
@@ -1049,6 +1046,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       onTap: section == null ? onTap : () => setState(() => _section = section),
     );
   }
+
+  /// Language names are shown in their own language.
+  String _languageLabel(String code) => switch (code) {
+        'en' => 'English',
+        _ => '简体中文',
+      };
 
   /// Appearance changes apply immediately, like iOS settings.
   void _setAppearance(VoidCallback change) {
