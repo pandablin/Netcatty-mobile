@@ -1,8 +1,15 @@
 name: Netcatty Android
+run-name: Android ${{ inputs.source_ref || github.sha }}
 
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - '.github/**'
+      - 'scripts/**'
+      - 'tests/**'
+      - 'docs/**'
+      - 'README.md'
   pull_request:
   workflow_dispatch:
     inputs:

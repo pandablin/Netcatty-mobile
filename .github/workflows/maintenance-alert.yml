@@ -1,0 +1,50 @@
+name: Maintenance alerts
+
+on:
+  workflow_run:
+    workflows: [Sync upstream, Netcatty Android]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      smoke_test:
+        description: 'Send one clearly marked test notification to the repository owner'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: netcatty-maintenance-alerts
+  cancel-in-progress: false
+
+jobs:
+  notify:
+    if: >-
+      github.repository == 'pandablin/Netcatty-mobile' &&
+      ((github.event_name == 'workflow_dispatch' && inputs.smoke_test == true) ||
+       (github.event_name == 'workflow_run' &&
+        contains(fromJSON('["failure","timed_out","startup_failure","action_required"]'), github.event.workflow_run.conclusion)))
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read
+      checks: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: false
+      - name: Notify a maintenance failure
+        if: github.event_name == 'workflow_run'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python -B scripts/notify_maintenance.py
+      - name: Verify owner notification delivery
+        if: github.event_name == 'workflow_dispatch' && inputs.smoke_test == true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python -B scripts/notify_maintenance.py --smoke-test

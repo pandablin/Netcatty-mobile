@@ -1,5 +1,7 @@
 """Offline Git-history fixtures: no remote network, credentials, build or publish."""
 import copy
+from contextlib import redirect_stderr, redirect_stdout
+import io
 import json
 import os
 from pathlib import Path
@@ -9,8 +11,9 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from scripts.sync_upstream import (DEFAULT_POLICY, SyncStopped, Version,
-                                   choose_version, load_policy, normalize_version, prepare)
+from scripts.sync_upstream import (DEFAULT_POLICY, FAILURE_MESSAGES, Git, SyncStopped, Version,
+                                   choose_version, failure_annotation, load_policy, main,
+                                   normalize_version, prepare, require)
 
 
 SCRIPT = Path(__file__).resolve().parents[1] / 'scripts/sync_upstream.py'
@@ -159,8 +162,26 @@ class SyncPreparationTests(unittest.TestCase):
         fixture.commit('local shared edit')
         fixture.local = fixture.sha()
         fixture.upstream({'lib/shared.dart': 'upstream change\n'})
-        with self.assertRaisesRegex(SyncStopped, 'real merge conflict'):
+        with self.assertRaisesRegex(SyncStopped, 'real merge conflict') as stopped:
             prepare(fixture.repo, fixture.policy, fetch=False)
+        self.assertEqual(stopped.exception.code, 'MERGE_CONFLICT')
+        fixture.assert_original(self)
+
+    def test_failed_merge_without_conflict_entries_is_a_git_failure(self):
+        fixture = self.fixture()
+        fixture.upstream()
+        original_run = Git.run
+
+        def failed_merge(git, *arguments, **options):
+            if 'merge' in arguments and '--no-commit' in arguments:
+                return subprocess.CompletedProcess(['git', *arguments], 128, stdout=b'',
+                                                   stderr=b'fatal: fixture merge failure')
+            return original_run(git, *arguments, **options)
+
+        with patch.object(Git, 'run', failed_merge):
+            with self.assertRaisesRegex(SyncStopped, 'without conflict entries') as stopped:
+                prepare(fixture.repo, fixture.policy, fetch=False)
+        self.assertEqual(stopped.exception.code, 'GIT_OPERATION_FAILED')
         fixture.assert_original(self)
 
     def test_release_and_lockfile_changes_stop_before_merging(self):
@@ -169,36 +190,41 @@ class SyncPreparationTests(unittest.TestCase):
             with self.subTest(name=name):
                 fixture = self.fixture()
                 fixture.upstream({name: 'upstream replacement\n'})
-                with self.assertRaisesRegex(SyncStopped, 'protected'):
+                with self.assertRaisesRegex(SyncStopped, 'protected') as stopped:
                     prepare(fixture.repo, fixture.policy, fetch=False)
+                self.assertEqual(stopped.exception.code, 'PROTECTED_CHANGE')
                 fixture.assert_original(self)
 
     def test_pubspec_dependency_change_is_not_resolved_as_a_version_conflict(self):
         fixture = self.fixture()
         fixture.upstream({'pubspec.yaml': fixture.pubspec('1.11.0+50') + '\ndependencies:\n  example: any\n'})
-        with self.assertRaisesRegex(SyncStopped, 'dependency review'):
+        with self.assertRaisesRegex(SyncStopped, 'dependency review') as stopped:
             prepare(fixture.repo, fixture.policy, fetch=False)
+        self.assertEqual(stopped.exception.code, 'DEPENDENCY_CHANGE')
         fixture.assert_original(self)
 
     def test_local_critical_test_cannot_be_silently_replaced(self):
         fixture = self.fixture()
         fixture.upstream({'test/critical.dart': 'upstream removed assertions\n'})
-        with self.assertRaisesRegex(SyncStopped, 'critical test'):
+        with self.assertRaisesRegex(SyncStopped, 'critical test') as stopped:
             prepare(fixture.repo, fixture.policy, fetch=False)
+        self.assertEqual(stopped.exception.code, 'CRITICAL_TEST_CHANGED')
         fixture.assert_original(self)
 
     def test_owner_update_url_cannot_be_replaced(self):
         fixture = self.fixture()
         fixture.upstream({'lib/update.dart': "const update = 'https://api.github.com/repos/wxte/Netcatty-mobile/releases';\n"})
-        with self.assertRaisesRegex(SyncStopped, 'invariant'):
+        with self.assertRaisesRegex(SyncStopped, 'invariant') as stopped:
             prepare(fixture.repo, fixture.policy, fetch=False)
+        self.assertEqual(stopped.exception.code, 'CUSTOMIZATION_REGRESSION')
         fixture.assert_original(self)
 
     def test_oauth_default_cannot_return(self):
         fixture = self.fixture()
         fixture.upstream({'lib/oauth.dart': "const client = String.fromEnvironment('GITHUB_OAUTH_CLIENT_ID', defaultValue: 'Ov23lidR2u8OIkHW19nk');\n"})
-        with self.assertRaisesRegex(SyncStopped, 'invariant'):
+        with self.assertRaisesRegex(SyncStopped, 'invariant') as stopped:
             prepare(fixture.repo, fixture.policy, fetch=False)
+        self.assertEqual(stopped.exception.code, 'CUSTOMIZATION_REGRESSION')
         fixture.assert_original(self)
 
     def test_an_existing_candidate_is_never_forced_overwritten(self):
@@ -206,8 +232,9 @@ class SyncPreparationTests(unittest.TestCase):
         upstream = fixture.upstream()
         branch = fixture.policy['candidate_prefix'] + upstream
         fixture.git('branch', branch, fixture.base)
-        with self.assertRaisesRegex(SyncStopped, 'already exists'):
+        with self.assertRaisesRegex(SyncStopped, 'already exists') as stopped:
             prepare(fixture.repo, fixture.policy, fetch=False)
+        self.assertEqual(stopped.exception.code, 'CANDIDATE_EXISTS')
         self.assertEqual(fixture.git('rev-parse', branch), fixture.base)
         fixture.assert_original(self)
 
@@ -230,6 +257,39 @@ class SyncPreparationTests(unittest.TestCase):
         self.assertEqual(fixture.git('remote'), '')
         self.assertEqual(fixture.git('rev-parse', 'main'), fixture.local)
 
+    def test_cli_failure_emits_only_a_safe_annotation_and_still_exits_two(self):
+        fixture = self.fixture()
+        fixture.upstream({'scripts/sensitive-path-fixture.py': 'requires manual review\n'})
+        policy_path = fixture.root / 'policy.json'
+        policy_path.write_text(json.dumps(fixture.policy), encoding='utf-8')
+        output = fixture.root / 'github-output.txt'
+        result = subprocess.run([sys.executable, str(SCRIPT), '--repo', str(fixture.repo),
+                                 '--policy', str(policy_path), '--no-fetch'],
+                                stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                env=dict(os.environ, GITHUB_OUTPUT=str(output)), shell=False)
+        self.assertEqual(result.returncode, 2)
+        self.assertEqual(result.stdout.decode().strip(), failure_annotation(
+            SyncStopped('ignored', 'PROTECTED_CHANGE')))
+        self.assertIn('Automatic sync stopped: Upstream changes protected', result.stderr.decode())
+        self.assertNotIn('sensitive-path-fixture', result.stdout.decode())
+        self.assertFalse(output.exists())
+        fixture.assert_original(self)
+
+    def test_fetch_failure_is_classified_without_fetching_a_remote(self):
+        fixture = self.fixture()
+        original_run = Git.run
+
+        def offline_run(git, *arguments, **options):
+            if arguments[0] == 'fetch':
+                raise SyncStopped('Git operation failed; local fixture only.', 'GIT_OPERATION_FAILED')
+            return original_run(git, *arguments, **options)
+
+        with patch.object(Git, 'run', offline_run):
+            with self.assertRaises(SyncStopped) as stopped:
+                prepare(fixture.repo, fixture.policy)
+        self.assertEqual(stopped.exception.code, 'FETCH_FAILED')
+        fixture.assert_original(self)
+
     def test_version_order_and_build_counter_do_not_use_workflow_run_numbers(self):
         parse = lambda value: Version.parse('version: ' + value + '\n')
         self.assertEqual(choose_version(parse('1.10.1+49'), parse('1.11.0+2')).name, '1.11.0')
@@ -245,6 +305,74 @@ class SyncPreparationTests(unittest.TestCase):
         self.assertIn('test/github_auth_service_test.dart', policy['critical_tests'])
         self.assertIn('applicationId = "app.netcatty.mobile.audit"',
                       policy['required_text']['android/app/build.gradle.kts'])
+
+
+class SyncDiagnosticTests(unittest.TestCase):
+    def test_annotation_codes_are_fixed_and_unknown_values_fail_closed(self):
+        expected = {'PROTECTED_CHANGE', 'DEPENDENCY_CHANGE', 'MERGE_CONFLICT',
+                    'CUSTOMIZATION_REGRESSION', 'CRITICAL_TEST_CHANGED', 'CANDIDATE_EXISTS',
+                    'FETCH_FAILED', 'VERSION_INVALID', 'GIT_OPERATION_FAILED', 'UNKNOWN'}
+        self.assertEqual(set(FAILURE_MESSAGES), expected)
+        malicious = 'ghp_fixture_secret C:\\private\\config\n::error title=FORGED::payload'
+        for code in expected | {'UNKNOWN\n::error title=FORGED', 'unrecognized'}:
+            with self.subTest(code=code):
+                error = SyncStopped(malicious, code)
+                safe_code = code if code in expected else 'UNKNOWN'
+                self.assertEqual(error.code, safe_code)
+                annotation = failure_annotation(error)
+                self.assertEqual(annotation,
+                                 f'::error title=NETCATTY_SYNC_{safe_code}::{FAILURE_MESSAGES[safe_code]}')
+                self.assertNotIn('\n', annotation)
+                self.assertNotIn('ghp_fixture_secret', annotation)
+                self.assertNotIn('private', annotation)
+        self.assertEqual(failure_annotation(OSError(malicious)),
+                         failure_annotation(SyncStopped('ignored')))
+        # Even a mutated exception cannot inject a title after construction.
+        error.code = 'UNKNOWN\n::error title=FORGED'
+        self.assertEqual(failure_annotation(error), failure_annotation(SyncStopped('ignored')))
+
+    def test_git_stderr_is_not_used_in_exception_or_annotation(self):
+        malicious = b'ghp_fixture_secret\n::error title=FORGED::C:\\private\\config'
+        result = subprocess.CompletedProcess(['git'], 1, stdout=b'', stderr=malicious)
+        with patch('scripts.sync_upstream.subprocess.run', return_value=result):
+            with self.assertRaises(SyncStopped) as stopped:
+                Git(Path.cwd()).run('fixture-command')
+        self.assertEqual(stopped.exception.code, 'GIT_OPERATION_FAILED')
+        self.assertNotIn('ghp_fixture_secret', str(stopped.exception))
+        self.assertNotIn('ghp_fixture_secret', failure_annotation(stopped.exception))
+        self.assertNotIn('FORGED', failure_annotation(stopped.exception))
+
+    def test_cli_preserves_exit_and_local_error_but_not_in_annotation(self):
+        malicious = 'private-path ghp_fixture_secret\n::error title=FORGED::payload'
+        errors = (SyncStopped(malicious, 'MERGE_CONFLICT'), OSError(malicious), ValueError(malicious))
+        for error in errors:
+            with self.subTest(error_type=type(error).__name__):
+                stdout, stderr = io.StringIO(), io.StringIO()
+                with patch.object(sys, 'argv', [str(SCRIPT), '--no-fetch']), \
+                        patch('scripts.sync_upstream.load_policy', return_value={}), \
+                        patch('scripts.sync_upstream.prepare', side_effect=error), \
+                        redirect_stdout(stdout), redirect_stderr(stderr):
+                    with self.assertRaises(SystemExit) as stopped:
+                        main()
+                self.assertEqual(stopped.exception.code, 2)
+                self.assertEqual(stdout.getvalue(), failure_annotation(error) + '\n')
+                self.assertEqual(stderr.getvalue(), f'Automatic sync stopped: {malicious}\n')
+                self.assertNotIn('ghp_fixture_secret', stdout.getvalue())
+                self.assertNotIn('FORGED', stdout.getvalue())
+
+    def test_version_failures_and_unclassified_guards_have_stable_codes(self):
+        for text in ('name: fixture\n', 'version: bad\n', 'version: 01.2.3+4\n',
+                     'version: 1.2.3-rc.01+4\n'):
+            with self.subTest(text=text):
+                with self.assertRaises(SyncStopped) as stopped:
+                    Version.parse(text)
+                self.assertEqual(stopped.exception.code, 'VERSION_INVALID')
+        with self.assertRaises(SyncStopped) as stopped:
+            choose_version(Version((1, 2, 3), (), 2100000000), Version((1, 2, 3), (), 1))
+        self.assertEqual(stopped.exception.code, 'VERSION_INVALID')
+        with self.assertRaises(SyncStopped) as stopped:
+            require(False, 'original local guard text')
+        self.assertEqual(stopped.exception.code, 'UNKNOWN')
 
 
 if __name__ == '__main__':

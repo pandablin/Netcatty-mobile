@@ -190,6 +190,8 @@ Netcatty 的 Android / iOS 移动端实现：一个面向服务器管理、SSH �
 
 本仓库的 [Mobile CI](https://github.com/pandablin/Netcatty-mobile/actions/workflows/mobile.yml) 和 [Actions](https://github.com/pandablin/Netcatty-mobile/actions) 页面提供检查与构建记录。构建成功及已上传的产物以对应 Run 为准，Artifacts 默认保留 30 天。上游同步与自动发布的配置、失败处理及验收条件见 [上游同步说明](docs/UPSTREAM_SYNC.md)。
 
+同步或发布失败的 GitHub Issue 提醒规则、通知设置和中文处理矩阵见 [失败提醒与处理](docs/UPSTREAM_SYNC.md#失败提醒与处理)；是否已启用以实际 Actions 和 Issue 记录为准。
+
 ## 开发
 
 要求 Flutter 3.44.4、Dart 3.12、Android SDK；构建 iOS 还需要 macOS、Xcode 16+ 和 CocoaPods。
