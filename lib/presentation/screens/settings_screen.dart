@@ -416,6 +416,20 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                 .updateTerminalImeSuggestions(value),
                       ),
                       SwitchListTile(
+                        key: const ValueKey('host-tap-connects'),
+                        contentPadding: EdgeInsets.zero,
+                        title: const LText('点击主机直接连接'),
+                        subtitle: const LText(
+                          '长按主机查看详情、复制 IP；关闭后点击主机先显示详情',
+                        ),
+                        value: ref
+                            .watch(settingsControllerProvider)
+                            .hostTapConnects,
+                        onChanged: (value) => ref
+                            .read(settingsControllerProvider.notifier)
+                            .updateHostTapConnects(value),
+                      ),
+                      SwitchListTile(
                         key: const ValueKey('terminal-tap-to-keyboard'),
                         contentPadding: EdgeInsets.zero,
                         title: const LText('点击终端弹出键盘'),

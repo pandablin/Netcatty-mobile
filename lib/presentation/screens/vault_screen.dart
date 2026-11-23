@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:netcatty_mobile/presentation/localization/localized_widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -191,14 +192,17 @@ class _VaultScreenState extends ConsumerState<VaultScreen> {
                                 host: hosts[index],
                                 connected:
                                     connectedHostIds.contains(hosts[index].id),
-                                onConnect: () => _showHostDetails(hosts[index]),
+                                onTap: () => _onHostTap(hosts[index]),
+                                onLongPress: () =>
+                                    _onHostLongPress(hosts[index]),
                                 onEdit: () => _editHost(hosts[index]),
                               ),
                             ),
                           'tree' => _HostTree(
                               hosts: hosts,
                               connectedHostIds: connectedHostIds,
-                              onConnect: _showHostDetails,
+                              onTap: _onHostTap,
+                              onLongPress: _onHostLongPress,
                               onEdit: _editHost,
                             ),
                           _ => ListView.separated(
@@ -210,7 +214,9 @@ class _VaultScreenState extends ConsumerState<VaultScreen> {
                                 host: hosts[index],
                                 connected:
                                     connectedHostIds.contains(hosts[index].id),
-                                onConnect: () => _showHostDetails(hosts[index]),
+                                onTap: () => _onHostTap(hosts[index]),
+                                onLongPress: () =>
+                                    _onHostLongPress(hosts[index]),
                                 onEdit: () => _editHost(hosts[index]),
                               ),
                             ),
@@ -220,6 +226,28 @@ class _VaultScreenState extends ConsumerState<VaultScreen> {
         ],
       ),
     );
+  }
+
+  DateTime? _lastDirectConnect;
+
+  void _onHostTap(HostProfile host) {
+    if (!ref.read(settingsControllerProvider).hostTapConnects) {
+      _showHostDetails(host);
+      return;
+    }
+    // Ignore an accidental double tap opening two sessions.
+    final now = DateTime.now();
+    final last = _lastDirectConnect;
+    if (last != null && now.difference(last) < const Duration(seconds: 1)) {
+      return;
+    }
+    _lastDirectConnect = now;
+    _connect(host);
+  }
+
+  void _onHostLongPress(HostProfile host) {
+    HapticFeedback.mediumImpact();
+    _showHostDetails(host);
   }
 
   Future<void> _connect(HostProfile host) async {
@@ -358,6 +386,21 @@ class _VaultScreenState extends ConsumerState<VaultScreen> {
           ),
         ),
         actions: [
+          TextButton.icon(
+            key: const ValueKey('host-copy-ip'),
+            onPressed: () {
+              Clipboard.setData(ClipboardData(text: host.hostname));
+              Navigator.pop(context);
+              ScaffoldMessenger.of(this.context).showSnackBar(
+                const SnackBar(
+                  content: LText('已复制 IP'),
+                  duration: Duration(seconds: 2),
+                ),
+              );
+            },
+            icon: const Icon(Icons.copy_rounded),
+            label: const LText('复制 IP'),
+          ),
           TextButton.icon(
             onPressed: () => Navigator.pop(context, _HostAction.edit),
             icon: const Icon(Icons.edit_outlined),
@@ -703,14 +746,16 @@ class _VaultGroupChip extends StatelessWidget {
 class _HostTree extends StatelessWidget {
   const _HostTree({
     required this.hosts,
-    required this.onConnect,
+    required this.onTap,
+    required this.onLongPress,
     required this.onEdit,
     this.connectedHostIds = const {},
   });
 
   final List<HostProfile> hosts;
   final Set<String> connectedHostIds;
-  final ValueChanged<HostProfile> onConnect;
+  final ValueChanged<HostProfile> onTap;
+  final ValueChanged<HostProfile> onLongPress;
   final ValueChanged<HostProfile> onEdit;
 
   @override
@@ -754,7 +799,8 @@ class _HostTree extends StatelessWidget {
               for (final host in children)
                 ListTile(
                   contentPadding: const EdgeInsets.only(left: 28, right: 8),
-                  onTap: () => onConnect(host),
+                  onTap: () => onTap(host),
+                  onLongPress: () => onLongPress(host),
                   leading: _HostIcon(
                     host: host,
                     size: 38,
@@ -825,21 +871,23 @@ class _HostIcon extends StatelessWidget {
 class _HostCard extends StatelessWidget {
   const _HostCard({
     required this.host,
-    required this.onConnect,
+    required this.onTap,
+    required this.onLongPress,
     required this.onEdit,
     this.connected = false,
   });
   final HostProfile host;
   final bool connected;
-  final VoidCallback onConnect;
+  final VoidCallback onTap;
+  final VoidCallback onLongPress;
   final VoidCallback onEdit;
 
   @override
   Widget build(BuildContext context) => Card(
         clipBehavior: Clip.antiAlias,
         child: InkWell(
-          onTap: onConnect,
-          onLongPress: onEdit,
+          onTap: onTap,
+          onLongPress: onLongPress,
           child: Padding(
             padding: const EdgeInsets.fromLTRB(14, 12, 6, 12),
             child: Column(
@@ -890,18 +938,21 @@ class _HostCard extends StatelessWidget {
 class _HostTile extends StatelessWidget {
   const _HostTile({
     required this.host,
-    required this.onConnect,
+    required this.onTap,
+    required this.onLongPress,
     required this.onEdit,
     this.connected = false,
   });
   final HostProfile host;
   final bool connected;
-  final VoidCallback onConnect;
+  final VoidCallback onTap;
+  final VoidCallback onLongPress;
   final VoidCallback onEdit;
   @override
   Widget build(BuildContext context) => Card(
         child: ListTile(
-          onTap: onConnect,
+          onTap: onTap,
+          onLongPress: onLongPress,
           leading: _HostIcon(host: host, size: 42, connected: connected),
           title: LText(host.label),
           subtitle: LText('${host.username}@${host.hostname}:${host.port}'),

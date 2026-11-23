@@ -59,6 +59,7 @@ class AppSettings {
     this.terminalSecureKeyboard = false,
     this.terminalTapToKeyboard = true,
     this.terminalImeSuggestions = true,
+    this.hostTapConnects = true,
     this.liveActivityEnabled = true,
     this.liveActivityShowCommand = true,
     this.sftpSyntaxHighlight = true,
@@ -118,6 +119,7 @@ class AppSettings {
       terminalSecureKeyboard: json['terminalSecureKeyboard'] == true,
       terminalTapToKeyboard: json['terminalTapToKeyboard'] != false,
       terminalImeSuggestions: json['terminalImeSuggestions'] != false,
+      hostTapConnects: json['hostTapConnects'] != false,
       liveActivityEnabled: json['liveActivityEnabled'] != false,
       liveActivityShowCommand: json['liveActivityShowCommand'] != false,
       sftpSyntaxHighlight: json['sftpSyntaxHighlight'] != false,
@@ -163,6 +165,10 @@ class AppSettings {
   /// upstream xterm behaviour (reset after every key).
   final bool terminalImeSuggestions;
 
+  /// Tapping a host connects right away; long press opens its details
+  /// (Termius style). When false, tapping opens the details.
+  final bool hostTapConnects;
+
   /// iOS: show connected servers in the Dynamic Island / Lock Screen.
   final bool liveActivityEnabled;
 
@@ -192,6 +198,7 @@ class AppSettings {
     bool? terminalSecureKeyboard,
     bool? terminalTapToKeyboard,
     bool? terminalImeSuggestions,
+    bool? hostTapConnects,
     bool? liveActivityEnabled,
     bool? liveActivityShowCommand,
     bool? sftpSyntaxHighlight,
@@ -221,6 +228,7 @@ class AppSettings {
             terminalTapToKeyboard ?? this.terminalTapToKeyboard,
         terminalImeSuggestions:
             terminalImeSuggestions ?? this.terminalImeSuggestions,
+        hostTapConnects: hostTapConnects ?? this.hostTapConnects,
         liveActivityEnabled: liveActivityEnabled ?? this.liveActivityEnabled,
         liveActivityShowCommand:
             liveActivityShowCommand ?? this.liveActivityShowCommand,
@@ -254,6 +262,7 @@ class AppSettings {
         'terminalSecureKeyboard': terminalSecureKeyboard,
         'terminalTapToKeyboard': terminalTapToKeyboard,
         'terminalImeSuggestions': terminalImeSuggestions,
+        'hostTapConnects': hostTapConnects,
         'liveActivityEnabled': liveActivityEnabled,
         'liveActivityShowCommand': liveActivityShowCommand,
         'sftpSyntaxHighlight': sftpSyntaxHighlight,

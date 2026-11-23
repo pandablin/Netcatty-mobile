@@ -1,4 +1,9 @@
 const englishTranslations = <String, String>{
+  '点击主机直接连接': 'Tap a host to connect',
+  '长按主机查看详情、复制 IP；关闭后点击主机先显示详情':
+      'Long press a host for details and to copy its IP. When off, tapping a host shows its details first',
+  '复制 IP': 'Copy IP',
+  '已复制 IP': 'IP copied',
   '灵动岛显示连接': 'Show connections in Dynamic Island',
   '切到后台时在灵动岛和锁屏显示已连接的服务器、连接时长':
       'When the app is in the background, show connected servers and connection time in the Dynamic Island and on the Lock Screen',
