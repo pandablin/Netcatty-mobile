@@ -18,7 +18,7 @@ jobs:
   test:
     runs-on: ubuntu-latest
     env:
-      GITHUB_OAUTH_CLIENT_ID: ${{ vars.GITHUB_OAUTH_CLIENT_ID }}
+      NETCATTY_GITHUB_OAUTH_CLIENT_ID: ${{ vars.NETCATTY_GITHUB_OAUTH_CLIENT_ID }}
     steps:
       - uses: actions/checkout@v4
       - name: Read app version
@@ -63,18 +63,18 @@ jobs:
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         shell: bash
         run: |
-          if [[ -z "${GITHUB_OAUTH_CLIENT_ID//[[:space:]]/}" ]]; then
-            echo "::warning::GITHUB_OAUTH_CLIENT_ID is not configured. GitHub device login will be unavailable in these APKs; manual tokens, WebDAV and S3 remain available."
+          if [[ -z "${NETCATTY_GITHUB_OAUTH_CLIENT_ID//[[:space:]]/}" ]]; then
+            echo "::warning::NETCATTY_GITHUB_OAUTH_CLIENT_ID is not configured. GitHub device login will be unavailable in these APKs; manual tokens, WebDAV and S3 remain available."
           fi
           flutter build apk --release \
             --build-number=${{ github.run_number }} \
-            "--dart-define=GITHUB_OAUTH_CLIENT_ID=${GITHUB_OAUTH_CLIENT_ID}"
+            "--dart-define=GITHUB_OAUTH_CLIENT_ID=${NETCATTY_GITHUB_OAUTH_CLIENT_ID}"
           mkdir -p dist
           cp build/app/outputs/flutter-apk/app-release.apk \
             "dist/netcatty-mobile-v${{ steps.app_version.outputs.version }}-android.apk"
           flutter build apk --release --split-per-abi \
             --build-number=${{ github.run_number }} \
-            "--dart-define=GITHUB_OAUTH_CLIENT_ID=${GITHUB_OAUTH_CLIENT_ID}"
+            "--dart-define=GITHUB_OAUTH_CLIENT_ID=${NETCATTY_GITHUB_OAUTH_CLIENT_ID}"
       - name: Prepare Android package
         shell: bash
         run: |
@@ -99,7 +99,7 @@ jobs:
     runs-on: macos-latest
     timeout-minutes: 45
     env:
-      GITHUB_OAUTH_CLIENT_ID: ${{ vars.GITHUB_OAUTH_CLIENT_ID }}
+      NETCATTY_GITHUB_OAUTH_CLIENT_ID: ${{ vars.NETCATTY_GITHUB_OAUTH_CLIENT_ID }}
     steps:
       - uses: actions/checkout@v4
       - name: Read app version
@@ -122,11 +122,11 @@ jobs:
       - name: Build unsigned iOS release app
         shell: bash
         run: |
-          if [[ -z "${GITHUB_OAUTH_CLIENT_ID//[[:space:]]/}" ]]; then
-            echo "::warning::GITHUB_OAUTH_CLIENT_ID is not configured. GitHub device login will be unavailable in this IPA; manual tokens, WebDAV and S3 remain available."
+          if [[ -z "${NETCATTY_GITHUB_OAUTH_CLIENT_ID//[[:space:]]/}" ]]; then
+            echo "::warning::NETCATTY_GITHUB_OAUTH_CLIENT_ID is not configured. GitHub device login will be unavailable in this IPA; manual tokens, WebDAV and S3 remain available."
           fi
           flutter build ios --release --no-codesign \
-            "--dart-define=GITHUB_OAUTH_CLIENT_ID=${GITHUB_OAUTH_CLIENT_ID}"
+            "--dart-define=GITHUB_OAUTH_CLIENT_ID=${NETCATTY_GITHUB_OAUTH_CLIENT_ID}"
       - name: Package re-signable IPA
         shell: bash
         run: |

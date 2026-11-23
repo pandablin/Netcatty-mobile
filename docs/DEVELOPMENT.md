@@ -37,7 +37,9 @@ flutter run --dart-define="GITHUB_OAUTH_CLIENT_ID=<your-client-id>"
 
 作用域由应用请求 `gist read:user`。Client ID 可以随客户端分发，此流程无需 Client Secret。Client Secret、访问 Token 和用户授权码不得写入源码、文档、Issue 或日志。
 
-本仓库 CI 的 Android、iOS job 从 Repository variable `GITHUB_OAUTH_CLIENT_ID` 注入同一个配置。设置入口为 **仓库 Settings → Secrets and variables → Actions → Variables**；不使用包含其他人 Client ID 的硬编码，也不要求 Token 或 Client Secret。变量为空时只警告并继续构建，GitHub Device Flow 在运行时明确不可用，手动 Token、WebDAV/S3 不受影响。配置变更只影响重新构建的安装包。
+本仓库 CI 的 Android、iOS job 从 Repository variable `NETCATTY_GITHUB_OAUTH_CLIENT_ID` 读取同一个配置，并使用同名 job 环境变量。设置入口为 **仓库 Settings → Secrets and variables → Actions → Variables**；不使用包含其他人 Client ID 的硬编码，也不要求 Token 或 Client Secret。变量为空时只警告并继续构建，GitHub Device Flow 在运行时明确不可用，手动 Token、WebDAV/S3 不受影响。配置变更只影响重新构建的安装包。
+
+这项 GitHub 配置变量不能命名为 `GITHUB_OAUTH_CLIENT_ID`，因为 [GitHub 禁止配置变量使用 `GITHUB_` 前缀](https://docs.github.com/en/actions/reference/workflows-and-actions/variables#naming-conventions-for-configuration-variables)。CI 将 `NETCATTY_GITHUB_OAUTH_CLIENT_ID` 的值映射到 `--dart-define="GITHUB_OAUTH_CLIENT_ID=..."`；Dart 读取的编译参数名和本地构建命令仍保持 `GITHUB_OAUTH_CLIENT_ID`。
 
 认证单元测试使用虚构 Client ID 和内存 HTTP 客户端，不需要配置真实 OAuth 应用或访问 GitHub。
 

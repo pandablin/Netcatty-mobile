@@ -220,7 +220,9 @@ flutter run --dart-define="GITHUB_OAUTH_CLIENT_ID=<your-client-id>"
 flutter build apk --release --dart-define="GITHUB_OAUTH_CLIENT_ID=<your-client-id>"
 ```
 
-3. 使用本仓库 CI 时，在 **仓库 Settings → Secrets and variables → Actions → Variables** 新增 Repository variable `GITHUB_OAUTH_CLIENT_ID`，值为该公开 Client ID。Android 和 iOS 构建统一使用它。
+3. 使用本仓库 CI 时，在 **仓库 Settings → Secrets and variables → Actions → Variables** 新增 Repository variable `NETCATTY_GITHUB_OAUTH_CLIENT_ID`，值为该公开 Client ID。Android 和 iOS job 使用同名环境变量，将其值传给 Dart 编译参数 `GITHUB_OAUTH_CLIENT_ID`。
+
+注意这两个名字属于不同层：GitHub 仓库配置变量使用 `NETCATTY_GITHUB_OAUTH_CLIENT_ID`，因为 [GitHub 禁止配置变量以 `GITHUB_` 开头](https://docs.github.com/en/actions/reference/workflows-and-actions/variables#naming-conventions-for-configuration-variables)；本地和 CI 的 `--dart-define` 参数名仍是 `GITHUB_OAUTH_CLIENT_ID`，不要改成带 `NETCATTY_` 的名字。
 
 未配置时，CI 会明确警告但继续构建；安装包中的 GitHub Device Flow 登录不可用，不会回退到其他人的 OAuth 应用。手动 Token、WebDAV 和 S3 仍可使用。Client ID 是编译期设置，修改变量后需要重新构建安装包。当前申请权限仍为 `gist read:user`，请在 GitHub 授权页核对应用所属账号和权限。
 
