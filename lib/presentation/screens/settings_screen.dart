@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/cupertino.dart' show CupertinoPage;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
@@ -74,6 +75,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   var _loaded = false;
   var _busy = false;
   var _checkingSyncVersions = false;
+  _SettingsSection? _section;
   String? _githubUser;
   CloudSyncVersions? _syncVersions;
   Object? _syncVersionsError;
@@ -161,34 +163,184 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   @override
-  Widget build(BuildContext context) => _buildSettings(
-        context,
-        ref.watch(autoSyncControllerProvider),
-      );
+  @override
+  Widget build(BuildContext context) {
+    final autoSyncState = ref.watch(autoSyncControllerProvider);
+    // Sections open as pages of a nested navigator. The pages are rebuilt
+    // from this state, so changes show at once, and iOS swipe-back works.
+    return SafeArea(
+      // Lists scroll under the floating tab bar.
+      bottom: false,
+      child: Navigator(
+        pages: [
+          CupertinoPage<void>(
+            key: const ValueKey('settings-index'),
+            child: _indexPage(context),
+          ),
+          if (_section != null)
+            CupertinoPage<void>(
+              key: ValueKey('settings-${_section!.name}'),
+              child: _sectionPage(context, _section!, autoSyncState),
+            ),
+        ],
+        onDidRemovePage: (page) {
+          if (page.key != const ValueKey('settings-index') && mounted) {
+            setState(() => _section = null);
+          }
+        },
+      ),
+    );
+  }
 
-  Widget _buildSettings(
+  Widget _indexPage(BuildContext context) {
+    final settings = ref.watch(settingsControllerProvider);
+    final scheme = Theme.of(context).colorScheme;
+    final themeName =
+        NetcattyTheme.resolve(Theme.of(context).brightness, uiThemeId).name;
+    return Scaffold(
+      appBar: AppBar(title: const LText('设置')),
+      body: ListView(
+        padding: EdgeInsets.fromLTRB(
+          16,
+          4,
+          16,
+          MediaQuery.paddingOf(context).bottom + 20,
+        ),
+        children: [
+          Card(
+            margin: EdgeInsets.zero,
+            child: ListTile(
+              minTileHeight: 76,
+              leading: Container(
+                width: 46,
+                height: 46,
+                decoration: BoxDecoration(
+                  color: scheme.primary.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(Icons.pets, color: scheme.primary),
+              ),
+              title: const Text(
+                'Netcatty Mobile',
+                style: TextStyle(
+                  fontFamily: NetcattyTheme.displayFont,
+                  fontSize: 19,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              subtitle: FutureBuilder<PackageInfo>(
+                future: _packageInfo,
+                builder: (context, snapshot) => Text(
+                  snapshot.hasData
+                      ? 'v${snapshot.data!.version} · GPL-3.0-or-later'
+                      : 'GPL-3.0-or-later',
+                ),
+              ),
+            ),
+          ),
+          _groupLabel('通用'),
+          _group([
+            _navRow(
+              key: const ValueKey('settings-appearance'),
+              icon: Icons.palette_outlined,
+              title: '外观',
+              value: themeName,
+              section: _SettingsSection.appearance,
+            ),
+            _navRow(
+              key: const ValueKey('settings-terminal'),
+              icon: Icons.terminal,
+              title: '终端与连接',
+              value: '${terminalFontSize.round()} pt',
+              section: _SettingsSection.terminal,
+            ),
+            if (Platform.isIOS)
+              _navRow(
+                key: const ValueKey('settings-island'),
+                icon: Icons.view_agenda_outlined,
+                title: '灵动岛',
+                value: settings.liveActivityEnabled ? '开启' : '关闭',
+                section: _SettingsSection.island,
+              ),
+            _navRow(
+              key: const ValueKey('settings-language'),
+              icon: Icons.translate,
+              title: '语言',
+              value: language == 'en' ? 'English' : '简体中文',
+              section: _SettingsSection.language,
+            ),
+          ]),
+          _groupLabel('数据'),
+          _group([
+            _navRow(
+              key: const ValueKey('settings-sync'),
+              icon: Icons.cloud_outlined,
+              title: '云同步',
+              value: switch (provider) {
+                SyncProviderType.webdav => 'WebDAV',
+                SyncProviderType.githubGist => 'GitHub',
+                SyncProviderType.s3 => 'S3',
+              },
+              section: _SettingsSection.sync,
+            ),
+            _navRow(
+              icon: Icons.key_outlined,
+              title: 'SSH 密钥库',
+              onTap: () => showModalBottomSheet<void>(
+                context: context,
+                isScrollControlled: true,
+                useSafeArea: true,
+                builder: (_) => const KeychainSheet(),
+              ),
+            ),
+            _navRow(
+              icon: Icons.file_upload_outlined,
+              title: '导入 Netcatty JSON',
+              onTap: _import,
+            ),
+            _navRow(
+              icon: Icons.file_download_outlined,
+              title: '导出保险库 JSON',
+              subtitle: '导出包含凭据，请妥善保存',
+              onTap: _export,
+            ),
+          ]),
+          _groupLabel('Catty Agent'),
+          _group([
+            _navRow(
+              icon: Icons.auto_awesome_outlined,
+              title: '管理多个 AI 服务商',
+              onTap: _openAiProviders,
+            ),
+          ]),
+          _groupLabel('关于'),
+          _group([
+            _updateCheckTile(),
+            _navRow(
+              key: const ValueKey('settings-security'),
+              icon: Icons.shield_outlined,
+              title: '安全与隐私',
+              section: _SettingsSection.security,
+            ),
+          ]),
+        ],
+      ),
+    );
+  }
+
+  Widget _sectionPage(
     BuildContext context,
+    _SettingsSection section,
     AutoSyncState autoSyncState,
   ) =>
-      SafeArea(
-        // The list scrolls under the floating glass tab bar.
-        bottom: false,
-        child: Scaffold(
-          appBar: AppBar(title: const LText('设置')),
-          body: ListView(
-            padding: EdgeInsets.fromLTRB(
-              16,
-              0,
-              16,
-              MediaQuery.paddingOf(context).bottom + 16,
-            ),
-            children: [
-              _header('外观与终端', '移动端偏好不会覆盖桌面端专属布局字段'),
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(14),
-                  child: Column(
-                    children: [
+      switch (section) {
+        _SettingsSection.appearance => _page('外观', [
+            Card(
+              margin: EdgeInsets.zero,
+              child: Padding(
+                padding: const EdgeInsets.all(14),
+                child: Column(
+                  children: [
                       SegmentedButton<String>(
                         segments: const [
                           ButtonSegment(
@@ -209,7 +361,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         ],
                         selected: {themeMode},
                         onSelectionChanged: (value) =>
-                            setState(() => themeMode = value.first),
+                            _setAppearance(() => themeMode = value.first),
                       ),
                       const SizedBox(height: 12),
                       Builder(
@@ -255,7 +407,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                             return;
                           }
                           if (mounted) {
-                            setState(() => customBackgroundEnabled = value);
+                            _setAppearance(() => customBackgroundEnabled = value);
                           }
                         },
                       ),
@@ -276,7 +428,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                             ),
                           ],
                           selected: {customBackgroundScope},
-                          onSelectionChanged: (value) => setState(
+                          onSelectionChanged: (value) => _setAppearance(
                             () => customBackgroundScope = value.first,
                           ),
                         ),
@@ -339,6 +491,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                 onChanged: (value) => setState(
                                   () => customBackgroundOpacity = value,
                                 ),
+                                onChangeEnd: (_) => _autoSaveAppearance(),
                               ),
                             ),
                             SizedBox(
@@ -368,7 +521,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                           ],
                           onChanged: (value) {
                             if (value != null) {
-                              setState(
+                              _setAppearance(
                                 () => customBackgroundAlignment = value,
                               );
                             }
@@ -376,6 +529,19 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         ),
                         const SizedBox(height: 8),
                       ],
+                  ],
+                ),
+              ),
+            ),
+            _note('外观设置会立即生效；移动端偏好不会覆盖桌面端专属布局字段'),
+          ]),
+        _SettingsSection.terminal => _page('终端与连接', [
+            Card(
+              margin: EdgeInsets.zero,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(14, 8, 14, 8),
+                child: Column(
+                  children: [
                       Row(
                         children: [
                           const LText('终端字号'),
@@ -388,6 +554,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                               label: terminalFontSize.toStringAsFixed(0),
                               onChanged: (value) =>
                                   setState(() => terminalFontSize = value),
+                              onChangeEnd: (_) => _autoSaveAppearance(),
                             ),
                           ),
                           LText(terminalFontSize.toStringAsFixed(0)),
@@ -423,20 +590,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                 .updateTerminalImeSuggestions(value),
                       ),
                       SwitchListTile(
-                        key: const ValueKey('host-tap-connects'),
-                        contentPadding: EdgeInsets.zero,
-                        title: const LText('点击主机直接连接'),
-                        subtitle: const LText(
-                          '长按主机查看详情、复制 IP；关闭后点击主机先显示详情',
-                        ),
-                        value: ref
-                            .watch(settingsControllerProvider)
-                            .hostTapConnects,
-                        onChanged: (value) => ref
-                            .read(settingsControllerProvider.notifier)
-                            .updateHostTapConnects(value),
-                      ),
-                      SwitchListTile(
                         key: const ValueKey('terminal-tap-to-keyboard'),
                         contentPadding: EdgeInsets.zero,
                         title: const LText('点击终端弹出键盘'),
@@ -450,7 +603,51 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                             .read(settingsControllerProvider.notifier)
                             .updateTerminalTapToKeyboard(value),
                       ),
-                      if (Platform.isIOS) ...[
+                      SwitchListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: const LText('SFTP 代码高亮'),
+                        subtitle: const LText('编辑文件时显示语法颜色'),
+                        value: sftpSyntaxHighlight,
+                        onChanged: (value) =>
+                            _setAppearance(() => sftpSyntaxHighlight = value),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+            _groupLabel('主机列表'),
+            Card(
+              margin: EdgeInsets.zero,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                child: Column(
+                  children: [
+                      SwitchListTile(
+                        key: const ValueKey('host-tap-connects'),
+                        contentPadding: EdgeInsets.zero,
+                        title: const LText('点击主机直接连接'),
+                        subtitle: const LText(
+                          '长按主机查看详情、复制 IP；关闭后点击主机先显示详情',
+                        ),
+                        value: ref
+                            .watch(settingsControllerProvider)
+                            .hostTapConnects,
+                        onChanged: (value) => ref
+                            .read(settingsControllerProvider.notifier)
+                            .updateHostTapConnects(value),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          ]),
+        _SettingsSection.island => _page('灵动岛', [
+            Card(
+              margin: EdgeInsets.zero,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                child: Column(
+                  children: [
                         SwitchListTile(
                           key: const ValueKey('live-activity-enabled'),
                           contentPadding: EdgeInsets.zero,
@@ -483,43 +680,33 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                   .updateLiveActivityShowCommand(value)
                               : null,
                         ),
-                      ],
-                      SwitchListTile(
-                        contentPadding: EdgeInsets.zero,
-                        title: const LText('SFTP 代码高亮'),
-                        subtitle: const LText('编辑文件时显示语法颜色'),
-                        value: sftpSyntaxHighlight,
-                        onChanged: (value) =>
-                            setState(() => sftpSyntaxHighlight = value),
-                      ),
-                      const SizedBox(height: 8),
-                      SegmentedButton<String>(
-                        segments: const [
-                          ButtonSegment(
-                            value: 'zh-CN',
-                            label: LText('中文'),
-                          ),
-                          ButtonSegment(
-                            value: 'en',
-                            label: LText('英文'),
-                          ),
-                        ],
-                        selected: {language},
-                        onSelectionChanged: (value) =>
-                            setState(() => language = value.first),
-                      ),
-                      SizedBox(
-                        width: double.infinity,
-                        child: OutlinedButton(
-                          onPressed: _saveAppearance,
-                          child: const LText('保存外观设置'),
-                        ),
-                      ),
-                    ],
-                  ),
+                  ],
                 ),
               ),
-              _header('云同步', '兼容桌面端 netcatty-vault.json 加密格式'),
+            ),
+            _note('需要 iOS 16.2 以上；只在 App 切到后台时显示，点一下回到对应的终端'),
+          ]),
+        _SettingsSection.language => _page('语言', [
+            _group([
+              for (final (code, label) in const [
+                ('zh-CN', '简体中文'),
+                ('en', 'English'),
+              ])
+                ListTile(
+                  key: ValueKey('language-$code'),
+                  minTileHeight: 52,
+                  title: Text(label),
+                  trailing: language == code
+                      ? Icon(
+                          Icons.check,
+                          color: Theme.of(context).colorScheme.primary,
+                        )
+                      : null,
+                  onTap: () => _setAppearance(() => language = code),
+                ),
+            ]),
+          ]),
+        _SettingsSection.sync => _page('云同步', [
               Card(
                 child: Padding(
                   padding: const EdgeInsets.all(14),
@@ -753,47 +940,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   ),
                 ),
               ),
-              _header('Catty Agent', '使用 OpenAI 兼容接口连续对话，命令执行前始终确认'),
-              ListTile(
-                leading: const Icon(Icons.dns_outlined),
-                title: const LText('管理多个 AI 服务商'),
-                subtitle: const LText('独立地址、密钥、模型与兼容参数，仅保存在本机'),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: _openAiProviders,
-              ),
-              _header('数据管理', '导入导出会保留桌面端未知字段和插件数据'),
-              Card(
-                child: Column(
-                  children: [
-                    ListTile(
-                      leading: const Icon(Icons.key_outlined),
-                      title: const LText('SSH 密钥库'),
-                      subtitle: const LText('导入私钥与口令'),
-                      onTap: () => showModalBottomSheet<void>(
-                        context: context,
-                        isScrollControlled: true,
-                        useSafeArea: true,
-                        builder: (_) => const KeychainSheet(),
-                      ),
-                    ),
-                    const Divider(height: 1),
-                    ListTile(
-                      leading: const Icon(Icons.file_upload_outlined),
-                      title: const LText('导入 Netcatty JSON'),
-                      subtitle: const LText('支持桌面端解密后的保险库数据'),
-                      onTap: _import,
-                    ),
-                    const Divider(height: 1),
-                    ListTile(
-                      leading: const Icon(Icons.file_download_outlined),
-                      title: const LText('导出保险库 JSON'),
-                      subtitle: const LText('导出包含凭据，请妥善保存'),
-                      onTap: _export,
-                    ),
-                  ],
-                ),
-              ),
-              _header('安全', null),
+            _note('兼容桌面端 netcatty-vault.json 加密格式'),
+          ]),
+        _SettingsSection.security => _page('安全与隐私', [
               const Card(
                 child: Column(
                   children: [
@@ -811,41 +960,106 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   ],
                 ),
               ),
-              _header('关于与更新', '自动检查 GitHub 上的最新正式版本'),
-              Card(child: _updateCheckTile()),
-              const SizedBox(height: 20),
-              Center(
-                child: FutureBuilder<PackageInfo>(
-                  future: _packageInfo,
-                  builder: (context, snapshot) => LText(
-                    snapshot.hasData
-                        ? 'Netcatty Mobile ${snapshot.data!.version} · GPL-3.0-or-later'
-                        : 'Netcatty Mobile · GPL-3.0-or-later',
-                  ),
-                ),
-              ),
-            ],
+          ]),
+      };
+
+  Widget _page(String title, List<Widget> children) => Scaffold(
+        appBar: AppBar(title: LText(title)),
+        body: ListView(
+          padding: EdgeInsets.fromLTRB(
+            16,
+            4,
+            16,
+            MediaQuery.paddingOf(context).bottom + 20,
+          ),
+          children: children,
+        ),
+      );
+
+  Widget _groupLabel(String text) => Padding(
+        padding: const EdgeInsets.fromLTRB(18, 22, 18, 8),
+        child: LText(
+          text,
+          style: TextStyle(
+            fontSize: 13,
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
           ),
         ),
       );
 
-  Widget _header(String title, String? subtitle) => Padding(
-        padding: const EdgeInsets.fromLTRB(4, 20, 4, 8),
+  Widget _note(String text) => Padding(
+        padding: const EdgeInsets.fromLTRB(18, 8, 18, 0),
+        child: LText(
+          text,
+          style: TextStyle(
+            fontSize: 12.5,
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
+        ),
+      );
+
+  /// One inset-grouped panel; rows are separated by dividers that start at
+  /// the text, as in iOS settings.
+  Widget _group(List<Widget> rows) => Card(
+        margin: EdgeInsets.zero,
+        clipBehavior: Clip.antiAlias,
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            LText(title, style: const TextStyle(fontWeight: FontWeight.w600)),
-            if (subtitle != null)
-              LText(
-                subtitle,
-                style: TextStyle(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  fontSize: 12,
-                ),
-              ),
+            for (var index = 0; index < rows.length; index++) ...[
+              if (index > 0) const Divider(indent: 56, height: 1),
+              rows[index],
+            ],
           ],
         ),
       );
+
+  Widget _navRow({
+    Key? key,
+    required IconData icon,
+    required String title,
+    String? subtitle,
+    String? value,
+    _SettingsSection? section,
+    VoidCallback? onTap,
+  }) {
+    final muted = Theme.of(context).colorScheme.onSurfaceVariant;
+    return ListTile(
+      key: key,
+      minTileHeight: 52,
+      leading: Icon(icon, size: 22),
+      title: LText(title),
+      subtitle: subtitle == null ? null : LText(subtitle),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (value != null)
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 150),
+              child: LText(
+                value,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(color: muted, fontSize: 15),
+              ),
+            ),
+          if (section != null) ...[
+            const SizedBox(width: 2),
+            Icon(Icons.chevron_right, size: 20, color: muted),
+          ],
+        ],
+      ),
+      onTap: section == null ? onTap : () => setState(() => _section = section),
+    );
+  }
+
+  /// Appearance changes apply immediately, like iOS settings.
+  void _setAppearance(VoidCallback change) {
+    setState(change);
+    _autoSaveAppearance();
+  }
+
+  void _autoSaveAppearance() => unawaited(_saveAppearance(silent: true));
+
 
   Widget _syncVersionsCard() {
     final colors = Theme.of(context).colorScheme;
@@ -1343,6 +1557,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         customBackgroundPath = stored;
         customBackgroundEnabled = true;
       });
+      _autoSaveAppearance();
     } catch (error) {
       _message('选择背景图片失败：$error');
     }
@@ -1358,6 +1573,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       customBackgroundPath = '';
       customBackgroundEnabled = false;
     });
+    _autoSaveAppearance();
   }
 
   String _backgroundAlignmentLabel(String value) => switch (value) {
@@ -1372,7 +1588,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         _ => '居中',
       };
 
-  Future<void> _saveAppearance() async {
+  Future<void> _saveAppearance({bool silent = false}) async {
     final current = ref.read(settingsControllerProvider);
     await ref.read(settingsControllerProvider.notifier).update(
           current.copyWith(
@@ -1395,7 +1611,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         previousBackgroundPath != customBackgroundPath) {
       await _backgroundImageService.remove(previousBackgroundPath);
     }
-    _message('外观设置已保存');
+    if (!silent) _message('外观设置已保存');
   }
 
   Future<void> _setTerminalSecureKeyboard(bool value) async {
@@ -1429,7 +1645,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         selectedId: uiThemeId,
       ),
     );
-    if (selected != null && mounted) setState(() => uiThemeId = selected);
+    if (selected != null && mounted) _setAppearance(() => uiThemeId = selected);
   }
 
   Future<void> _import() async {
@@ -1491,3 +1707,5 @@ class _AdaptiveSyncProviderLabel extends StatelessWidget {
         ),
       );
 }
+
+enum _SettingsSection { appearance, terminal, island, language, sync, security }

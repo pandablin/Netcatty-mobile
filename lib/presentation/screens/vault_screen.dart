@@ -12,6 +12,7 @@ import '../../application/host_sorting.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/host_editor.dart';
 import '../theme.dart';
+import '../widgets/context_menu.dart';
 import '../widgets/glass.dart';
 import '../widgets/host_system_icon.dart';
 
@@ -270,8 +271,8 @@ class _VaultScreenState extends ConsumerState<VaultScreen> {
                                 connected:
                                     connectedHostIds.contains(hosts[index].id),
                                 onTap: () => _onHostTap(hosts[index]),
-                                onLongPress: () =>
-                                    _onHostLongPress(hosts[index]),
+                                onLongPress: (item) =>
+                                    _onHostLongPress(hosts[index], item),
                                 onEdit: () => _editHost(hosts[index]),
                               ),
                             ),
@@ -294,8 +295,8 @@ class _VaultScreenState extends ConsumerState<VaultScreen> {
                                 connected:
                                     connectedHostIds.contains(hosts[index].id),
                                 onTap: () => _onHostTap(hosts[index]),
-                                onLongPress: () =>
-                                    _onHostLongPress(hosts[index]),
+                                onLongPress: (item) =>
+                                    _onHostLongPress(hosts[index], item),
                                 onEdit: () => _editHost(hosts[index]),
                               ),
                             ),
@@ -411,9 +412,68 @@ class _VaultScreenState extends ConsumerState<VaultScreen> {
     _connect(host);
   }
 
-  void _onHostLongPress(HostProfile host) {
+  Future<void> _onHostLongPress(HostProfile host, BuildContext item) async {
     HapticFeedback.mediumImpact();
-    _showHostDetails(host);
+    final connected = ref
+        .read(sessionControllerProvider)
+        .sessions
+        .any((session) => session.connected && session.host.id == host.id);
+    final action = await showContextMenu<_HostMenu>(
+      context: context,
+      anchor: globalRectOf(item),
+      preview: _HostPreview(host: host, connected: connected),
+      actions: const [
+        ContextMenuAction(
+          value: _HostMenu.connect,
+          label: '连接',
+          icon: Icons.terminal,
+        ),
+        ContextMenuAction(
+          value: _HostMenu.copyIp,
+          label: '复制 IP',
+          icon: Icons.copy_rounded,
+        ),
+        ContextMenuAction(
+          value: _HostMenu.details,
+          label: '查看详情',
+          icon: Icons.info_outline,
+        ),
+        ContextMenuAction(
+          value: _HostMenu.edit,
+          label: '编辑',
+          icon: Icons.edit_outlined,
+        ),
+        ContextMenuAction(
+          value: _HostMenu.delete,
+          label: '删除',
+          icon: Icons.delete_outline,
+          destructive: true,
+        ),
+      ],
+    );
+    if (!mounted || action == null) return;
+    switch (action) {
+      case _HostMenu.connect:
+        _connect(host);
+      case _HostMenu.copyIp:
+        _copyHostIp(host);
+      case _HostMenu.details:
+        _showHostDetails(host);
+      case _HostMenu.edit:
+        _editHost(host);
+      case _HostMenu.delete:
+        _confirmDeleteHost(host);
+    }
+  }
+
+  void _copyHostIp(HostProfile host) {
+    Clipboard.setData(ClipboardData(text: host.hostname));
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: LText('已复制 IP'),
+        duration: Duration(seconds: 2),
+      ),
+    );
   }
 
   Future<void> _connect(HostProfile host) async {
@@ -555,14 +615,8 @@ class _VaultScreenState extends ConsumerState<VaultScreen> {
           TextButton.icon(
             key: const ValueKey('host-copy-ip'),
             onPressed: () {
-              Clipboard.setData(ClipboardData(text: host.hostname));
               Navigator.pop(context);
-              ScaffoldMessenger.of(this.context).showSnackBar(
-                const SnackBar(
-                  content: LText('已复制 IP'),
-                  duration: Duration(seconds: 2),
-                ),
-              );
+              _copyHostIp(host);
             },
             icon: const Icon(Icons.copy_rounded),
             label: const LText('复制 IP'),
@@ -923,7 +977,7 @@ class _HostTree extends StatelessWidget {
   final List<HostProfile> hosts;
   final Set<String> connectedHostIds;
   final ValueChanged<HostProfile> onTap;
-  final ValueChanged<HostProfile> onLongPress;
+  final void Function(HostProfile host, BuildContext item) onLongPress;
   final ValueChanged<HostProfile> onEdit;
 
   @override
@@ -965,12 +1019,13 @@ class _HostTree extends StatelessWidget {
             subtitle: LText('${children.length} 台服务器'),
             children: [
               for (final host in children)
-                ListTile(
+                Builder(
+                  builder: (item) => ListTile(
                   dense: true,
                   visualDensity: const VisualDensity(vertical: -2),
                   contentPadding: const EdgeInsets.only(left: 20, right: 4),
                   onTap: () => onTap(host),
-                  onLongPress: () => onLongPress(host),
+                  onLongPress: () => onLongPress(host, item),
                   leading: _HostIcon(
                     host: host,
                     size: 34,
@@ -984,6 +1039,7 @@ class _HostTree extends StatelessWidget {
                     onPressed: () => onEdit(host),
                     icon: const Icon(Icons.more_vert),
                   ),
+                ),
                 ),
             ],
           ),
@@ -1049,7 +1105,9 @@ class _HostCard extends StatelessWidget {
   final HostProfile host;
   final bool connected;
   final VoidCallback onTap;
-  final VoidCallback onLongPress;
+
+  /// Receives the item's context, to anchor the context menu.
+  final ValueChanged<BuildContext> onLongPress;
   final VoidCallback onEdit;
 
   /// Card height: icon row + name + address (+ group), scaled with the
@@ -1067,7 +1125,7 @@ class _HostCard extends StatelessWidget {
         child: InkWell(
           borderRadius: BorderRadius.circular(22),
           onTap: onTap,
-          onLongPress: onLongPress,
+          onLongPress: () => onLongPress(context),
           child: Padding(
             padding: const EdgeInsets.fromLTRB(12, 10, 4, 10),
             child: Column(
@@ -1134,7 +1192,9 @@ class _HostTile extends StatelessWidget {
   final HostProfile host;
   final bool connected;
   final VoidCallback onTap;
-  final VoidCallback onLongPress;
+
+  /// Receives the item's context, to anchor the context menu.
+  final ValueChanged<BuildContext> onLongPress;
   final VoidCallback onEdit;
   @override
   Widget build(BuildContext context) => Card(
@@ -1149,7 +1209,7 @@ class _HostTile extends StatelessWidget {
           visualDensity: const VisualDensity(vertical: -2),
           contentPadding: const EdgeInsets.only(left: 12, right: 4),
           onTap: onTap,
-          onLongPress: onLongPress,
+          onLongPress: () => onLongPress(context),
           leading: _HostIcon(host: host, size: 36, connected: connected),
           title: LText(
             host.label,
@@ -1165,6 +1225,65 @@ class _HostTile extends StatelessWidget {
 }
 
 enum _HostAction { connect, edit }
+
+enum _HostMenu { connect, copyIp, details, edit, delete }
+
+/// The lifted card shown above the long-press menu.
+class _HostPreview extends StatelessWidget {
+  const _HostPreview({required this.host, required this.connected});
+
+  final HostProfile host;
+  final bool connected;
+
+  @override
+  Widget build(BuildContext context) {
+    final small = Theme.of(context).textTheme.bodySmall;
+    final system = host.systemInfo?.prettyName ?? '';
+    return Card(
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 14, 16, 14),
+        child: Row(
+          children: [
+            _HostIcon(host: host, size: 46, connected: connected),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  LText(
+                    host.label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  LText(
+                    '${host.username}@${host.hostname}:${host.port}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: small,
+                  ),
+                  if (system.isNotEmpty)
+                    LText(
+                      system,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: small,
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
 
 class _DetailRow extends StatelessWidget {
   const _DetailRow({

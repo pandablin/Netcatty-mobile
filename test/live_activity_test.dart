@@ -119,4 +119,31 @@ void main() {
       expect(hidden['command'], '');
     });
   });
+
+  group('sessionIdFromDeepLink', () {
+    test('accepts the full link and the path Flutter may report', () {
+      expect(sessionIdFromDeepLink(Uri.parse('netcatty:///session/abc-1')),
+          'abc-1');
+      expect(sessionIdFromDeepLink(Uri.parse('/session/abc-1')), 'abc-1');
+      expect(sessionIdFromDeepLink(Uri.parse('netcatty://session/abc-1')),
+          'abc-1');
+    });
+
+    test('ignores other links', () {
+      expect(sessionIdFromDeepLink(Uri.parse('ssh://root@host')), isNull);
+      expect(sessionIdFromDeepLink(Uri.parse('/')), isNull);
+      expect(sessionIdFromDeepLink(Uri.parse('netcatty:///settings')), isNull);
+    });
+  });
+
+  test('payload carries the active session id for the deep link', () {
+    final state = SessionState(sessions: [_session('s1', 'Aws-JP')]);
+    final payload = buildLiveActivityPayload(
+      sessions: state,
+      settings: const AppSettings(),
+      lastCommandFor: (_) => null,
+      english: false,
+    )!;
+    expect(payload['activeId'], 's1');
+  });
 }

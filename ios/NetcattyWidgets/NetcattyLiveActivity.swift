@@ -14,6 +14,13 @@ private let connectedGreen = Color(red: 0.20, green: 0.84, blue: 0.42)
 private let disconnectedOrange = Color(red: 1.0, green: 0.62, blue: 0.20)
 private let tileBackground = Color(red: 0.11, green: 0.13, blue: 0.20)
 
+/// Deep link back to the session shown in the activity. Flutter receives it
+/// as the route "/session/<id>" and switches to that terminal.
+private func sessionURL(_ state: NetcattyActivityAttributes.ContentState) -> URL? {
+  let id = state.activeId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? ""
+  return URL(string: "netcatty:///session/\(id)")
+}
+
 private func statusColor(connected: Bool, stale: Bool) -> Color {
   if stale { return .gray }
   return connected ? connectedGreen : disconnectedOrange
@@ -39,6 +46,7 @@ struct NetcattyLiveActivityWidget: Widget {
       LockScreenView(state: context.state, stale: context.isStale)
         .activityBackgroundTint(Color.black.opacity(0.85))
         .activitySystemActionForegroundColor(.white)
+        .widgetURL(sessionURL(context.state))
     } dynamicIsland: { context in
       let state = context.state
       let stale = context.isStale
@@ -129,6 +137,7 @@ struct NetcattyLiveActivityWidget: Widget {
           .frame(width: 18, height: 18)
       }
       .keylineTint(tint)
+      .widgetURL(sessionURL(state))
     }
   }
 }

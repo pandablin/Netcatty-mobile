@@ -60,7 +60,7 @@ void main() {
     expect(tester.getSize(chip).height, 36);
   });
 
-  testWidgets('long press opens host details with a copy IP button',
+  testWidgets('long press opens a context menu that copies the IP',
       (tester) async {
     const secureStorageChannel =
         MethodChannel('plugins.it_nomads.com/flutter_secure_storage');
@@ -106,12 +106,15 @@ void main() {
 
     await tester.longPress(find.text('Server').first);
     await tester.pumpAndSettle();
-    expect(find.text('连接地址'), findsOneWidget);
+    // iOS-style context menu with the actions and a lifted preview.
+    expect(find.text('查看详情'), findsOneWidget);
+    expect(find.text('删除'), findsOneWidget);
+    expect(find.text('root@192.0.2.10:22'), findsWidgets);
 
-    await tester.tap(find.byKey(const ValueKey('host-copy-ip')));
+    await tester.tap(find.text('复制 IP'));
     await tester.pumpAndSettle();
     expect(copied, '192.0.2.10');
-    expect(find.text('连接地址'), findsNothing);
+    expect(find.text('查看详情'), findsNothing);
     expect(find.text('已复制 IP'), findsOneWidget);
   });
 }

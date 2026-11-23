@@ -39,6 +39,7 @@ Map<String, Object?>? buildLiveActivityPayload({
   final address = host.hostname.trim();
   return {
     'lang': english ? 'en' : 'zh',
+    'activeId': active.id,
     'activeName': _label(active),
     'activeDistro': active.systemInfo?.distro ?? host.distro,
     'activeConnected': active.connected,
@@ -49,6 +50,20 @@ Map<String, Object?>? buildLiveActivityPayload({
     'count': sessions.sessions.length,
     'sessions': listed.map(describe).toList(growable: false),
   };
+}
+
+/// The session id in a Live Activity deep link, or null for other links.
+///
+/// The activity opens `netcatty:///session/<id>`; depending on the engine,
+/// Flutter reports either that full URI or only its path.
+String? sessionIdFromDeepLink(Uri uri) {
+  if (uri.scheme.isNotEmpty && uri.scheme != 'netcatty') return null;
+  final segments = [
+    if (uri.host.isNotEmpty) uri.host,
+    ...uri.pathSegments.where((segment) => segment.isNotEmpty),
+  ];
+  if (segments.length != 2 || segments.first != 'session') return null;
+  return segments.last;
 }
 
 String _label(ActiveTerminalSession session) {

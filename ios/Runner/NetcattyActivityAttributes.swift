@@ -16,6 +16,8 @@ struct NetcattyActivityAttributes: ActivityAttributes {
   public struct ContentState: Codable, Hashable {
     /// "zh" or "en"; the extension has no access to the app's settings.
     var lang: String
+    /// Session id; tapping the activity opens netcatty:///session/<id>.
+    var activeId: String
     var activeName: String
     var activeDistro: String
     var activeConnected: Bool

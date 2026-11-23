@@ -95,6 +95,7 @@ final class NetcattyLiveActivityManager {
     let since = (arguments["connectedSince"] as? NSNumber)?.doubleValue
     return NetcattyActivityAttributes.ContentState(
       lang: arguments["lang"] as? String ?? "zh",
+      activeId: arguments["activeId"] as? String ?? "",
       activeName: arguments["activeName"] as? String ?? "",
       activeDistro: arguments["activeDistro"] as? String ?? "linux",
       activeConnected: arguments["activeConnected"] as? Bool ?? true,

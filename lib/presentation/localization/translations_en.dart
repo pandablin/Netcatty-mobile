@@ -1,4 +1,18 @@
 const englishTranslations = <String, String>{
+  '查看详情': 'Details',
+  '通用': 'General',
+  '外观': 'Appearance',
+  '终端与连接': 'Terminal & Connections',
+  '灵动岛': 'Dynamic Island',
+  '开启': 'On',
+  '简体中文': 'Simplified Chinese',
+  '关于': 'About',
+  '安全与隐私': 'Security & Privacy',
+  '主机列表': 'Host list',
+  '外观设置会立即生效；移动端偏好不会覆盖桌面端专属布局字段':
+      'Appearance changes apply immediately. Mobile preferences never overwrite desktop-only layout fields',
+  '需要 iOS 16.2 以上；只在 App 切到后台时显示，点一下回到对应的终端':
+      'Requires iOS 16.2 or later. Shown only while the app is in the background; tap it to return to that terminal',
   '每个主题都有配套的浅色和深色版本，以及终端配色':
       'Every theme has matching light and dark versions and terminal colours',
   '按名称排序': 'Sort by name',
