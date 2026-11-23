@@ -92,6 +92,11 @@ void main() {
       'FormatException: The filename contains an unsafe path. Transfer stopped',
     );
     expect(
+      localized(
+          'Bad state: 当前安装包未配置 GitHub OAuth Client ID，请使用已配置的版本或手动填写 Token'),
+      'Bad state: This build has no GitHub OAuth Client ID. Use a configured build or enter a token manually',
+    );
+    expect(
       localized('云端未找到 netcatty-vault.json，且本机没有可同步数据。'
           '未上传空保险库，请检查云同步目录或地址，并先在桌面端上传数据'),
       'No netcatty-vault.json was found in the cloud, and this device has no data to sync. '

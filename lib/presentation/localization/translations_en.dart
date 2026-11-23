@@ -1,4 +1,6 @@
 const englishTranslations = <String, String>{
+  '当前安装包未配置 GitHub OAuth Client ID，请使用已配置的版本或手动填写 Token':
+      'This build has no GitHub OAuth Client ID. Use a configured build or enter a token manually',
   '文件名包含不安全的路径，已停止传输': 'The filename contains an unsafe path. Transfer stopped',
   '云端未找到 netcatty-vault.json，且本机没有可同步数据。':
       'No netcatty-vault.json was found in the cloud, and this device has no data to sync. ',
@@ -642,6 +644,10 @@ const englishTranslations = <String, String>{
 /// Ordered fragments cover dynamic values and infrastructure errors that are
 /// ultimately rendered by a localized text widget.
 const englishReplacements = <(String, String)>[
+  (
+    '当前安装包未配置 GitHub OAuth Client ID，请使用已配置的版本或手动填写 Token',
+    'This build has no GitHub OAuth Client ID. Use a configured build or enter a token manually'
+  ),
   (
     '文件名包含不安全的路径，已停止传输',
     'The filename contains an unsafe path. Transfer stopped'

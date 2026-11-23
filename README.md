@@ -207,13 +207,24 @@ iOS 可重签构建：
 flutter build ios --release --no-codesign
 ```
 
-GitHub 登录需要在构建时提供自己的 OAuth App Client ID：
+### 配置自有 GitHub OAuth 应用
+
+GitHub 网页授权页上的应用名称与所属账号由 **OAuth Client ID** 决定，不由 APK 显示名称或当前登录账号决定。构建时应使用自己或可信发布者注册的 OAuth 应用，不再默认使用第三方 Client ID。
+
+1. 在自己的 GitHub 账号下进入 **Settings → Developer settings → OAuth Apps**，注册 OAuth App，并启用 **Device Flow**。可参考 GitHub 官方的 [OAuth App 注册说明](https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/creating-an-oauth-app) 和 [Device Flow 说明](https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/authorizing-oauth-apps#device-flow)。
+   当前客户端尚未实现 refresh token 自动续期。保留 **Expire user access tokens** 时，令牌八小时后需要重新登录；若按官方兼容说明关闭该项，则失去这项八小时过期保护，应妥善保护令牌并按需撤销。
+2. 复制该应用的公开 **Client ID**，在编译时注入：
 
 ```bash
-flutter run --dart-define=GITHUB_OAUTH_CLIENT_ID=<your-client-id>
+flutter run --dart-define="GITHUB_OAUTH_CLIENT_ID=<your-client-id>"
+flutter build apk --release --dart-define="GITHUB_OAUTH_CLIENT_ID=<your-client-id>"
 ```
 
-不要把 OAuth Client Secret、GitHub Token、主机凭据或签名私钥提交到仓库。
+3. 使用本仓库 CI 时，在 **仓库 Settings → Secrets and variables → Actions → Variables** 新增 Repository variable `GITHUB_OAUTH_CLIENT_ID`，值为该公开 Client ID。Android 和 iOS 构建统一使用它。
+
+未配置时，CI 会明确警告但继续构建；安装包中的 GitHub Device Flow 登录不可用，不会回退到其他人的 OAuth 应用。手动 Token、WebDAV 和 S3 仍可使用。Client ID 是编译期设置，修改变量后需要重新构建安装包。当前申请权限仍为 `gist read:user`，请在 GitHub 授权页核对应用所属账号和权限。
+
+**此 Device Flow 配置不需要 Client Secret，也不需要把 GitHub Token 提供给构建流程。** 不要把 OAuth Client Secret、GitHub Token、主机凭据或签名私钥提交到仓库。
 
 ## 开发文档
 

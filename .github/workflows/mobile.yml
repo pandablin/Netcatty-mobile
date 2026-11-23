@@ -17,6 +17,8 @@ concurrency:
 jobs:
   test:
     runs-on: ubuntu-latest
+    env:
+      GITHUB_OAUTH_CLIENT_ID: ${{ vars.GITHUB_OAUTH_CLIENT_ID }}
     steps:
       - uses: actions/checkout@v4
       - name: Read app version
@@ -59,16 +61,20 @@ jobs:
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: netcatty
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        shell: bash
         run: |
+          if [[ -z "${GITHUB_OAUTH_CLIENT_ID//[[:space:]]/}" ]]; then
+            echo "::warning::GITHUB_OAUTH_CLIENT_ID is not configured. GitHub device login will be unavailable in these APKs; manual tokens, WebDAV and S3 remain available."
+          fi
           flutter build apk --release \
             --build-number=${{ github.run_number }} \
-            --dart-define=GITHUB_OAUTH_CLIENT_ID=Ov23lidR2u8OIkHW19nk
+            "--dart-define=GITHUB_OAUTH_CLIENT_ID=${GITHUB_OAUTH_CLIENT_ID}"
           mkdir -p dist
           cp build/app/outputs/flutter-apk/app-release.apk \
             "dist/netcatty-mobile-v${{ steps.app_version.outputs.version }}-android.apk"
           flutter build apk --release --split-per-abi \
             --build-number=${{ github.run_number }} \
-            --dart-define=GITHUB_OAUTH_CLIENT_ID=Ov23lidR2u8OIkHW19nk
+            "--dart-define=GITHUB_OAUTH_CLIENT_ID=${GITHUB_OAUTH_CLIENT_ID}"
       - name: Prepare Android package
         shell: bash
         run: |
@@ -92,6 +98,8 @@ jobs:
     # iOS 27 devices this fork targets, and has more runner capacity.
     runs-on: macos-latest
     timeout-minutes: 45
+    env:
+      GITHUB_OAUTH_CLIENT_ID: ${{ vars.GITHUB_OAUTH_CLIENT_ID }}
     steps:
       - uses: actions/checkout@v4
       - name: Read app version
@@ -112,7 +120,13 @@ jobs:
           cache: true
       - run: flutter pub get
       - name: Build unsigned iOS release app
-        run: flutter build ios --release --no-codesign --dart-define=GITHUB_OAUTH_CLIENT_ID=Ov23lidR2u8OIkHW19nk
+        shell: bash
+        run: |
+          if [[ -z "${GITHUB_OAUTH_CLIENT_ID//[[:space:]]/}" ]]; then
+            echo "::warning::GITHUB_OAUTH_CLIENT_ID is not configured. GitHub device login will be unavailable in this IPA; manual tokens, WebDAV and S3 remain available."
+          fi
+          flutter build ios --release --no-codesign \
+            "--dart-define=GITHUB_OAUTH_CLIENT_ID=${GITHUB_OAUTH_CLIENT_ID}"
       - name: Package re-signable IPA
         shell: bash
         run: |

@@ -44,28 +44,31 @@ class GitHubAuthService {
   GitHubAuthService({
     http.Client? client,
     GitHubAuthDelay? delay,
+    String? oauthClientId,
     this.requestTimeout = const Duration(seconds: 20),
   })  : _client = client ?? http.Client(),
         _ownsClient = client == null,
-        _delay = delay ?? Future<void>.delayed;
+        _delay = delay ?? Future<void>.delayed,
+        _oauthClientId = (oauthClientId ?? clientId).trim();
 
-  static const clientId = String.fromEnvironment(
-    'GITHUB_OAUTH_CLIENT_ID',
-    defaultValue: 'Ov23lidR2u8OIkHW19nk',
-  );
+  /// Public OAuth app identifier supplied by the owner of this build. There is
+  /// deliberately no bundled third-party app or secret to fall back to.
+  static const clientId = String.fromEnvironment('GITHUB_OAUTH_CLIENT_ID');
 
   final http.Client _client;
   final bool _ownsClient;
   final GitHubAuthDelay _delay;
+  final String _oauthClientId;
   final Duration requestTimeout;
 
   Future<GitHubDeviceAuthorization> start() async {
+    final configuredClientId = _requireClientId();
     late final http.Response response;
     try {
       response = await _client.post(
         Uri.parse('https://github.com/login/device/code'),
         headers: const {'accept': 'application/json'},
-        body: const {'client_id': clientId, 'scope': 'gist read:user'},
+        body: {'client_id': configuredClientId, 'scope': 'gist read:user'},
       ).timeout(requestTimeout);
     } on Object catch (error) {
       if (_isTransient(error)) {
@@ -98,6 +101,8 @@ class GitHubAuthService {
     bool Function()? isCancelled,
     void Function(GitHubAuthPollState state)? onStateChanged,
   }) async {
+    _throwIfCancelled(isCancelled);
+    final configuredClientId = _requireClientId();
     var interval = authorization.interval;
     onStateChanged?.call(GitHubAuthPollState.waitingForAuthorization);
     while (DateTime.now().isBefore(authorization.expiresAt)) {
@@ -111,12 +116,13 @@ class GitHubAuthService {
           Uri.parse('https://github.com/login/oauth/access_token'),
           headers: const {'accept': 'application/json'},
           body: {
-            'client_id': clientId,
+            'client_id': configuredClientId,
             'device_code': authorization.deviceCode,
             'grant_type': 'urn:ietf:params:oauth:grant-type:device_code',
           },
         ).timeout(requestTimeout);
       } on Object catch (error) {
+        _throwIfCancelled(isCancelled);
         if (_isTransient(error)) {
           onStateChanged?.call(GitHubAuthPollState.retryingNetwork);
           continue;
@@ -124,6 +130,7 @@ class GitHubAuthService {
         rethrow;
       }
 
+      _throwIfCancelled(isCancelled);
       if (_isRetryableStatus(response.statusCode)) {
         onStateChanged?.call(GitHubAuthPollState.retryingNetwork);
         continue;
@@ -202,6 +209,13 @@ class GitHubAuthService {
     if (isCancelled?.call() == true) {
       throw const GitHubAuthCancelledException();
     }
+  }
+
+  String _requireClientId() {
+    if (_oauthClientId.isEmpty) {
+      throw StateError('当前安装包未配置 GitHub OAuth Client ID，请使用已配置的版本或手动填写 Token');
+    }
+    return _oauthClientId;
   }
 
   bool _isTransient(Object error) =>

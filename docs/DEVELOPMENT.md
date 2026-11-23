@@ -25,13 +25,21 @@ flutter pub get
 flutter doctor -v
 ```
 
-GitHub Device Flow 在编译期读取 `GITHUB_OAUTH_CLIENT_ID`：
+GitHub Device Flow 在编译期读取 `GITHUB_OAUTH_CLIENT_ID`，没有第三方默认值：
 
 ```bash
-flutter run --dart-define=GITHUB_OAUTH_CLIENT_ID=<your-client-id>
+flutter run --dart-define="GITHUB_OAUTH_CLIENT_ID=<your-client-id>"
 ```
 
-OAuth App 需要启用 Device Flow，作用域由应用请求 `gist read:user`。Client ID 可以随客户端分发，Client Secret、访问 Token 和用户授权码不得写入源码、文档、Issue 或日志。
+在自己的 GitHub 账号的 **Settings → Developer settings → OAuth Apps** 注册应用，并启用 **Device Flow**；复制公开 Client ID，而不是 Client Secret。官方步骤见 [创建 OAuth App](https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/creating-an-oauth-app) 和 [Device Flow](https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/authorizing-oauth-apps#device-flow)。授权页展示的应用所属账号取决于该 Client ID，不是 APK 名称或授权用户的登录名。
+
+当前客户端只保存 access token，尚未实现 refresh token 自动续期。GitHub 新注册应用默认启用的 **Expire user access tokens** 会使令牌八小时后过期，此后需要重新登录。官方兼容说明允许未支持短期令牌的客户端先关闭该项，但关闭后会失去这项定期过期保护，应妥善保护令牌并按需撤销；未来增加自动续期支持后再评估启用。
+
+作用域由应用请求 `gist read:user`。Client ID 可以随客户端分发，此流程无需 Client Secret。Client Secret、访问 Token 和用户授权码不得写入源码、文档、Issue 或日志。
+
+本仓库 CI 的 Android、iOS job 从 Repository variable `GITHUB_OAUTH_CLIENT_ID` 注入同一个配置。设置入口为 **仓库 Settings → Secrets and variables → Actions → Variables**；不使用包含其他人 Client ID 的硬编码，也不要求 Token 或 Client Secret。变量为空时只警告并继续构建，GitHub Device Flow 在运行时明确不可用，手动 Token、WebDAV/S3 不受影响。配置变更只影响重新构建的安装包。
+
+认证单元测试使用虚构 Client ID 和内存 HTTP 客户端，不需要配置真实 OAuth 应用或访问 GitHub。
 
 ## 日常开发命令
 
@@ -71,9 +79,9 @@ Release APK / App Bundle：
 
 ```bash
 flutter build apk --release \
-  --dart-define=GITHUB_OAUTH_CLIENT_ID=<your-client-id>
+  --dart-define="GITHUB_OAUTH_CLIENT_ID=<your-client-id>"
 flutter build appbundle --release \
-  --dart-define=GITHUB_OAUTH_CLIENT_ID=<your-client-id>
+  --dart-define="GITHUB_OAUTH_CLIENT_ID=<your-client-id>"
 ```
 
 签名信息通过环境变量或本机忽略文件提供。不要提交 `.jks`、`key.properties`、证书密码或 Base64 编码后的签名文件。
@@ -84,7 +92,7 @@ flutter build appbundle --release \
 
 ```bash
 flutter build ios --release --no-codesign \
-  --dart-define=GITHUB_OAUTH_CLIENT_ID=<your-client-id>
+  --dart-define="GITHUB_OAUTH_CLIENT_ID=<your-client-id>"
 ```
 
 在 macOS 中把 `build/ios/iphoneos/Runner.app` 放入 `Payload/` 后压缩即可生成可重签 IPA。App Store 或 TestFlight 构建需要自己的 Bundle ID、Team、Provisioning Profile 和分发证书。
