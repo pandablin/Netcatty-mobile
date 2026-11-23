@@ -53,7 +53,7 @@ class TerminalCustomKey {
 class AppSettings {
   const AppSettings({
     this.themeMode = 'dark',
-    this.uiThemeId = 'tokyo-night',
+    this.uiThemeId = 'claude',
     this.serverViewMode = 'grid',
     this.hostSortMode = 'name',
     this.hostOrder = const [],
@@ -117,7 +117,7 @@ class AppSettings {
     );
     return AppSettings(
       themeMode: json['themeMode']?.toString() ?? 'dark',
-      uiThemeId: json['uiThemeId']?.toString() ?? 'tokyo-night',
+      uiThemeId: json['uiThemeId']?.toString() ?? 'claude',
       serverViewMode: _serverViewMode(json['serverViewMode']?.toString()),
       hostSortMode: const {'name', 'recent', 'manual'}
               .contains(json['hostSortMode']?.toString())

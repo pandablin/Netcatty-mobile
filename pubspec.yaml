@@ -1,7 +1,7 @@
 name: netcatty_mobile
 description: Netcatty mobile SSH, SFTP and cloud-sync client for Android and iOS.
 publish_to: none
-version: 1.9.1+43
+version: 1.9.2+44
 
 environment:
   sdk: ">=3.4.0 <4.0.0"
@@ -48,3 +48,23 @@ flutter:
     - assets/
     - assets/distro_png/
     - assets/docker/
+    - assets/fonts/OFL-DMSans.txt
+    - assets/fonts/OFL-Lora.txt
+  # Interface fonts (SIL OFL): DM Sans for UI text, Lora for headings. Static
+  # Latin subsets; Chinese falls back to the system font (PingFang).
+  fonts:
+    - family: DMSans
+      fonts:
+        - asset: assets/fonts/DMSans-Regular.ttf
+        - asset: assets/fonts/DMSans-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/DMSans-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/DMSans-Bold.ttf
+          weight: 700
+    - family: Lora
+      fonts:
+        - asset: assets/fonts/Lora-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Lora-SemiBold.ttf
+          weight: 600

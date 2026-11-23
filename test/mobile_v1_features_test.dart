@@ -9,17 +9,27 @@ import 'package:netcatty_mobile/presentation/theme.dart';
 import 'package:netcatty_mobile/presentation/widgets/custom_background.dart';
 
 void main() {
-  test('desktop theme catalogue exposes 62 light and 62 dark themes', () {
-    expect(NetcattyTheme.presets(Brightness.light), hasLength(62));
-    expect(NetcattyTheme.presets(Brightness.dark), hasLength(62));
+  test('curated themes come in light/dark pairs with terminal palettes', () {
+    final light = NetcattyTheme.presets(Brightness.light);
+    final dark = NetcattyTheme.presets(Brightness.dark);
+    expect(light, hasLength(8));
+    expect(light.map((theme) => theme.id), dark.map((theme) => theme.id));
+    expect(light.first.id, 'claude');
+    for (final theme in [...light, ...dark]) {
+      expect(theme.ansi, hasLength(16), reason: theme.id);
+    }
     expect(
       NetcattyTheme.resolve(Brightness.dark, 'tokyo-night').name,
       'Tokyo Night',
     );
-    expect(
-      NetcattyTheme.build(Brightness.light, 'rose-pine').brightness,
-      Brightness.light,
-    );
+    // Ids from the old 62-theme catalogue fall back to the Claude theme.
+    expect(NetcattyTheme.resolve(Brightness.dark, 'midnight').id, 'claude');
+    final built = NetcattyTheme.build(Brightness.light, 'github');
+    expect(built.brightness, Brightness.light);
+    expect(built.extension<TerminalPalette>()?.ansi, hasLength(16));
+    expect(identical(built, NetcattyTheme.build(Brightness.light, 'github')),
+        isTrue);
+    expect(const AppSettings().uiThemeId, 'claude');
   });
 
   test('new appearance and server view settings round-trip safely', () {

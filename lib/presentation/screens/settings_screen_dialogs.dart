@@ -14,53 +14,35 @@ class _ThemePicker extends StatefulWidget {
 }
 
 class _ThemePickerState extends State<_ThemePicker> {
-  String query = '';
-
   @override
   Widget build(BuildContext context) {
-    final themes = NetcattyTheme.presets(widget.brightness)
-        .where(
-          (theme) =>
-              query.isEmpty ||
-              theme.name.toLowerCase().contains(query.toLowerCase()) ||
-              theme.id.contains(query.toLowerCase()),
-        )
-        .toList(growable: false);
-    return DraggableScrollableSheet(
-      expand: false,
-      initialChildSize: 0.8,
-      minChildSize: 0.45,
-      maxChildSize: 0.95,
-      builder: (context, controller) => Column(
+    final themes = NetcattyTheme.presets(widget.brightness);
+    return SafeArea(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                LText(
-                  widget.brightness == Brightness.dark ? '选择深色主题' : '选择浅色主题',
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
-                const SizedBox(height: 10),
-                TextField(
-                  autofocus: false,
-                  decoration: LInputDecoration(
-                    prefixIcon: Icon(Icons.search),
-                    hintText: '搜索 62 种主题',
-                  ),
-                  onChanged: (value) => setState(() => query = value.trim()),
-                ),
-              ],
+            padding: const EdgeInsets.fromLTRB(20, 18, 20, 4),
+            child: LText(
+              widget.brightness == Brightness.dark ? '选择深色主题' : '选择浅色主题',
+              style: Theme.of(context).textTheme.titleLarge,
             ),
           ),
-          Expanded(
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 10),
+            child: LText(
+              '每个主题都有配套的浅色和深色版本，以及终端配色',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ),
+          Flexible(
             child: GridView.builder(
-              controller: controller,
-              padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
+              shrinkWrap: true,
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
               gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                maxCrossAxisExtent: 210,
-                mainAxisExtent: 88,
+                maxCrossAxisExtent: 220,
+                mainAxisExtent: 92,
                 crossAxisSpacing: 10,
                 mainAxisSpacing: 10,
               ),
@@ -69,42 +51,60 @@ class _ThemePickerState extends State<_ThemePicker> {
                 final theme = themes[index];
                 final selected = theme.id == widget.selectedId;
                 return InkWell(
-                  borderRadius: BorderRadius.circular(12),
+                  key: ValueKey('theme-${theme.id}'),
+                  borderRadius: BorderRadius.circular(18),
                   onTap: () => Navigator.pop(context, theme.id),
                   child: Container(
-                    padding: const EdgeInsets.all(10),
+                    padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
                     decoration: BoxDecoration(
-                      color: theme.background,
-                      borderRadius: BorderRadius.circular(12),
+                      color: theme.card,
+                      borderRadius: BorderRadius.circular(18),
                       border: Border.all(
                         color: selected ? theme.primary : theme.border,
                         width: selected ? 2 : 1,
                       ),
                     ),
-                    child: Row(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Container(
-                          width: 12,
-                          decoration: BoxDecoration(
-                            color: theme.primary,
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: LText(
-                            theme.name,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              color: theme.foreground,
-                              fontWeight:
-                                  selected ? FontWeight.bold : FontWeight.w500,
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                theme.name,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: theme.foreground,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
                             ),
-                          ),
+                            if (selected)
+                              Icon(
+                                Icons.check_circle,
+                                size: 18,
+                                color: theme.primary,
+                              ),
+                          ],
                         ),
-                        if (selected)
-                          Icon(Icons.check_circle, color: theme.primary),
+                        const Spacer(),
+                        // Terminal colours: red, green, yellow, blue,
+                        // magenta, cyan.
+                        Row(
+                          children: [
+                            for (final color in theme.ansi.sublist(1, 7))
+                              Container(
+                                width: 14,
+                                height: 14,
+                                margin: const EdgeInsets.only(right: 5),
+                                decoration: BoxDecoration(
+                                  color: color,
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                          ],
+                        ),
                       ],
                     ),
                   ),

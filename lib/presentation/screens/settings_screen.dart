@@ -57,7 +57,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   var s3ForcePathStyle = true;
   var s3AllowInsecure = false;
   var themeMode = 'dark';
-  var uiThemeId = 'tokyo-night';
+  var uiThemeId = 'claude';
   var terminalFontSize = 14.0;
   var sftpSyntaxHighlight = true;
   var terminalSecureKeyboard = false;

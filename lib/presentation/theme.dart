@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
-/// A Material representation of the desktop Netcatty theme catalogue.
+/// One colour scheme of a light/dark theme pair, including its terminal
+/// palette.
 class NetcattyThemePreset {
   const NetcattyThemePreset({
     required this.id,
@@ -12,6 +13,7 @@ class NetcattyThemePreset {
     required this.primary,
     required this.border,
     required this.error,
+    required this.ansi,
   });
 
   final String id;
@@ -23,27 +25,45 @@ class NetcattyThemePreset {
   final Color primary;
   final Color border;
   final Color error;
+
+  /// The 16 ANSI colours: black, red, green, yellow, blue, magenta, cyan,
+  /// white, then the bright variants in the same order.
+  final List<Color> ansi;
+}
+
+/// Terminal ANSI palette of the active theme, read by the terminal view.
+class TerminalPalette extends ThemeExtension<TerminalPalette> {
+  const TerminalPalette(this.ansi);
+
+  final List<Color> ansi;
+
+  @override
+  TerminalPalette copyWith({List<Color>? ansi}) =>
+      TerminalPalette(ansi ?? this.ansi);
+
+  @override
+  TerminalPalette lerp(TerminalPalette? other, double t) =>
+      t < 0.5 || other == null ? this : other;
 }
 
 class NetcattyTheme {
-  static const accent = Color(0xfff97316);
+  static const defaultId = 'claude';
 
-  static final List<NetcattyThemePreset> _catalogue =
-      _rawThemes.trim().split('\n').map(_parsePreset).toList(growable: false);
+  /// Interface font (DM Sans; CJK falls back to the system font).
+  static const uiFont = 'DMSans';
 
-  static List<NetcattyThemePreset> presets(Brightness brightness) => _catalogue
-      .where((preset) => preset.brightness == brightness)
-      .toList(growable: false);
+  /// Heading font (Lora), used for the app title and large headings.
+  static const displayFont = 'Lora';
+
+  static List<NetcattyThemePreset> presets(Brightness brightness) =>
+      brightness == Brightness.dark ? _dark : _light;
 
   static NetcattyThemePreset resolve(Brightness brightness, String id) {
     final available = presets(brightness);
     return available.firstWhere(
       (preset) => preset.id == id,
-      orElse: () => available.firstWhere(
-        (preset) =>
-            preset.id == (brightness == Brightness.dark ? 'midnight' : 'snow'),
-        orElse: () => available.first,
-      ),
+      // Themes removed in 1.9.2 (the old 62-theme catalogue) fall back here.
+      orElse: () => available.first,
     );
   }
 
@@ -57,6 +77,8 @@ class NetcattyTheme {
   static ThemeData _build(Brightness brightness, String id) {
     final preset = resolve(brightness, id);
     final dark = brightness == Brightness.dark;
+    final muted = Color.lerp(preset.foreground, preset.background, 0.45)!;
+    final fill = preset.foreground.withValues(alpha: dark ? 0.07 : 0.045);
     final seed = ColorScheme.fromSeed(
       seedColor: preset.primary,
       brightness: brightness,
@@ -68,75 +90,178 @@ class NetcattyTheme {
       onSecondary: _contrast(preset.primary),
       surface: preset.card,
       onSurface: preset.foreground,
+      onSurfaceVariant: muted,
+      surfaceContainerLowest: preset.background,
+      surfaceContainerLow: preset.card,
+      surfaceContainer: preset.card,
+      surfaceContainerHigh: Color.alphaBlend(fill, preset.card),
+      surfaceContainerHighest: Color.alphaBlend(fill, preset.card),
       outline: preset.border,
       outlineVariant: preset.border.withValues(alpha: 0.7),
       error: preset.error,
       onError: _contrast(preset.error),
     );
-    return ThemeData(
+    // Claude-style primary action: an ink-coloured pill (near black in
+    // light mode, near white in dark mode).
+    final ink = preset.foreground;
+    final onInk = preset.background;
+    final base = ThemeData(
       brightness: brightness,
       useMaterial3: true,
-      scaffoldBackgroundColor: preset.background,
+      fontFamily: uiFont,
       colorScheme: scheme,
-      navigationBarTheme: NavigationBarThemeData(
-        backgroundColor: preset.card,
-        indicatorColor: preset.primary.withValues(alpha: 0.2),
-        height: 68,
+    );
+    final text = base.textTheme.apply(
+      bodyColor: preset.foreground,
+      displayColor: preset.foreground,
+    );
+    return base.copyWith(
+      scaffoldBackgroundColor: preset.background,
+      canvasColor: preset.background,
+      extensions: [TerminalPalette(preset.ansi)],
+      textTheme: text.copyWith(
+        headlineSmall: text.headlineSmall?.copyWith(
+          fontFamily: displayFont,
+          fontWeight: FontWeight.w600,
+        ),
+        titleLarge: text.titleLarge?.copyWith(
+          fontWeight: FontWeight.w600,
+          letterSpacing: -0.2,
+        ),
+        titleMedium: text.titleMedium?.copyWith(fontWeight: FontWeight.w500),
+        bodySmall: text.bodySmall?.copyWith(color: muted),
       ),
       appBarTheme: AppBarTheme(
         backgroundColor: preset.background,
         foregroundColor: preset.foreground,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
+        scrolledUnderElevation: 0,
+        centerTitle: true,
+        titleTextStyle: TextStyle(
+          fontFamily: uiFont,
+          fontSize: 17,
+          fontWeight: FontWeight.w600,
+          color: preset.foreground,
+        ),
       ),
+      // Borderless rounded panels, like iOS inset-grouped lists.
       cardTheme: CardThemeData(
         color: preset.card,
         elevation: 0,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-          side: BorderSide(
-            color: preset.border.withValues(alpha: dark ? 0.7 : 0.55),
+        margin: const EdgeInsets.symmetric(vertical: 6),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+      ),
+      dividerTheme: DividerThemeData(
+        color: preset.border.withValues(alpha: dark ? 0.8 : 1),
+        thickness: 0.6,
+        space: 1,
+      ),
+      listTileTheme: ListTileThemeData(
+        iconColor: Color.lerp(preset.foreground, preset.background, 0.25),
+        titleTextStyle: TextStyle(
+          fontFamily: uiFont,
+          fontSize: 16,
+          color: preset.foreground,
+        ),
+        subtitleTextStyle: TextStyle(
+          fontFamily: uiFont,
+          fontSize: 13,
+          color: muted,
+        ),
+      ),
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: fill,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide.none,
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide.none,
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide(color: preset.primary.withValues(alpha: 0.7)),
+        ),
+      ),
+      filledButtonTheme: FilledButtonThemeData(
+        style: FilledButton.styleFrom(
+          backgroundColor: ink,
+          foregroundColor: onInk,
+          shape: const StadiumBorder(),
+          textStyle: const TextStyle(
+            fontFamily: uiFont,
+            fontWeight: FontWeight.w600,
           ),
         ),
+      ),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          foregroundColor: preset.foreground,
+          shape: const StadiumBorder(),
+          side: BorderSide(color: preset.border),
+        ),
+      ),
+      textButtonTheme: TextButtonThemeData(
+        style: TextButton.styleFrom(foregroundColor: preset.foreground),
+      ),
+      switchTheme: SwitchThemeData(
+        trackOutlineColor: const WidgetStatePropertyAll(Colors.transparent),
+        thumbColor: WidgetStateProperty.resolveWith(
+          (states) => states.contains(WidgetState.selected)
+              ? Colors.white
+              : (dark ? const Color(0xff9a9a96) : Colors.white),
+        ),
+        trackColor: WidgetStateProperty.resolveWith(
+          (states) => states.contains(WidgetState.selected)
+              ? preset.primary
+              : preset.foreground.withValues(alpha: dark ? 0.16 : 0.12),
+        ),
+      ),
+      segmentedButtonTheme: SegmentedButtonThemeData(
+        style: SegmentedButton.styleFrom(
+          side: BorderSide(color: preset.border),
+          selectedBackgroundColor: preset.foreground.withValues(alpha: 0.08),
+          selectedForegroundColor: preset.foreground,
+        ),
+      ),
+      chipTheme: ChipThemeData(
+        shape: const StadiumBorder(),
+        side: BorderSide(color: preset.border),
+        backgroundColor: preset.card,
+        selectedColor: preset.foreground.withValues(alpha: 0.1),
       ),
       popupMenuTheme: PopupMenuThemeData(
         color: preset.card,
         surfaceTintColor: Colors.transparent,
         elevation: 8,
-        shadowColor: Colors.black.withValues(alpha: dark ? 0.5 : 0.18),
+        shadowColor: Colors.black.withValues(alpha: dark ? 0.5 : 0.16),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(18),
           side: BorderSide(color: preset.border.withValues(alpha: 0.5)),
         ),
       ),
-      dividerColor: preset.border,
-      inputDecorationTheme: InputDecorationTheme(
-        filled: true,
-        fillColor: Color.alphaBlend(
-          preset.foreground.withValues(alpha: dark ? 0.025 : 0.018),
-          preset.card,
-        ),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: preset.border),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: preset.border),
-        ),
-      ),
       bottomSheetTheme: BottomSheetThemeData(
         backgroundColor: preset.background,
         surfaceTintColor: Colors.transparent,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        ),
       ),
       dialogTheme: DialogThemeData(
         backgroundColor: preset.card,
         surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
       ),
-      // Floating so it sits above the glass tab bar instead of under it.
+      // Floating so it sits above the tab bar instead of under it.
       snackBarTheme: SnackBarThemeData(
-        backgroundColor: preset.foreground,
-        contentTextStyle: TextStyle(color: preset.background),
+        backgroundColor: dark ? const Color(0xff333331) : const Color(0xff242423),
+        contentTextStyle: const TextStyle(
+          fontFamily: uiFont,
+          color: Colors.white,
+        ),
         behavior: SnackBarBehavior.floating,
         insetPadding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -144,162 +269,253 @@ class NetcattyTheme {
     );
   }
 
-  static NetcattyThemePreset _parsePreset(String line) {
-    final values = line.split('|');
-    final brightness = values[0] == 'd' ? Brightness.dark : Brightness.light;
-    return NetcattyThemePreset(
-      id: values[1],
-      name: values[2],
-      brightness: brightness,
-      background: _hsl(values[3]),
-      foreground: _hsl(values[4]),
-      card: _hsl(values[5]),
-      primary: _hsl(values[6]),
-      border: _hsl(values[7]),
-      error: _hsl(values[8]),
-    );
-  }
-
-  static Color _hsl(String value) {
-    final parts = value.replaceAll('%', '').split(' ');
-    return HSLColor.fromAHSL(
-      1,
-      double.parse(parts[0]),
-      double.parse(parts[1]) / 100,
-      double.parse(parts[2]) / 100,
-    ).toColor();
-  }
-
   static Color _contrast(Color color) =>
       color.computeLuminance() > 0.46 ? Colors.black : Colors.white;
 }
 
-// background, foreground, card, primary, border and destructive tokens are
-// copied from the desktop catalogue. Keeping this compact makes all 124
-// variants available without maintaining a parallel generated asset.
-const _rawThemes = r'''
-l|snow|Snow|216 33% 96%|222 47% 12%|0 0% 100%|208 100% 50%|220 16% 82%|0 70% 50%
-l|pure-white|Pure White|0 0% 100%|222 47% 12%|0 0% 100%|210 90% 48%|220 12% 88%|0 70% 50%
-l|ivory|Ivory|38 40% 95%|222 47% 12%|40 45% 98%|28 85% 50%|34 24% 84%|0 70% 50%
-l|mist|Mist|210 20% 97%|222 47% 12%|210 20% 99%|195 90% 45%|210 14% 84%|0 70% 50%
-l|mint|Mint|150 30% 96%|222 47% 12%|150 30% 98%|160 70% 40%|150 16% 84%|0 70% 50%
-l|sand|Sand|34 30% 94%|222 47% 12%|34 30% 97%|24 80% 50%|34 16% 82%|0 70% 50%
-l|lavender|Lavender|270 30% 97%|222 47% 12%|270 30% 99%|270 70% 55%|270 18% 86%|0 70% 50%
-l|a-cup-of-coffee|A cup of coffee|0 0% 98.4%|0 0% 0%|0 0% 99.2%|211.3 95.3% 33.1%|0 0% 83.5%|0 61.4% 49.8%
-l|abolkog|ABOLKOG|0 0% 100%|210 12.2% 16.1%|0 0% 100%|40 70.6% 73.3%|0 0% 85.1%|354.3 42.3% 56.5%
-l|aurora|Aurora|44.5 88.6% 93.1%|40.5 100% 14.5%|47.1 87.5% 96.9%|171.4 100% 22%|43.8 24.5% 79.2%|341.7 100% 36.1%
-l|ayu|Ayu|210 16.7% 97.6%|210 5.2% 38%|240 20% 99%|75.1 100% 35.1%|210 2.3% 83.1%|0 80.9% 69.2%
-l|base16-flat|Base16 Flat|192 15.2% 93.5%|184.3 5.8% 52.5%|200 20% 97.1%|204.1 69.9% 53.1%|195 3.8% 79.6%|5.6 78.1% 57.1%
-l|base16-mocha|Base16 Mocha|18 33.3% 94.1%|30 22% 32.2%|12 38.5% 97.5%|16.1 51.9% 63.3%|15 7.8% 80%|347.1 50.7% 58.6%
-l|blue-dolphin|Blue Dolphin|195 40% 94.1%|193.2 65.8% 14.9%|192 38.5% 97.5%|195 100% 25.1%|192 9.8% 80%|353.3 64.3% 43.9%
-l|calm-days-sober-nights-sky|Calm Days, Sober Nights Sky|0 0% 100%|221.5 11.1% 45.9%|0 0% 100%|142.1 100% 35.1%|0 0% 85.1%|350.1 76% 67.3%
-l|catppuccin|Catppuccin|220 23.1% 94.9%|233.8 16% 35.5%|220 27.3% 97.8%|219.9 91.5% 53.9%|216 5.1% 80.6%|347.1 86.7% 44.1%
-l|chai|Chai|0 0% 96.9%|228 8.2% 23.9%|0 0% 98.4%|262.9 85.6% 59.2%|0 0% 82.4%|344.9 69.7% 49.2%
-l|chinolor|Chinolor|38.2 44% 95.1%|130 6.5% 18%|36 45.5% 97.8%|48.2 100% 23.9%|36 10.2% 80.8%|355.2 83.7% 59%
-l|cyberdyne|Cyberdyne|248.6 22.6% 93.9%|153.9 69.7% 12.9%|255 28.6% 97.3%|213 100% 31.4%|240 5.9% 80%|9 76.9% 40.8%
-l|desert|Desert|34.3 22.6% 93.9%|27.6 74.5% 20%|30 28.6% 97.3%|147.7 100% 20.4%|30 5.9% 80%|0 100% 36.1%
-l|django-reborn-again|Django Reborn Again|150 26.7% 94.1%|155 47.4% 14.9%|150 28.6% 97.3%|51.1 100% 23.9%|150 5.9% 80%|20.9 100% 36.1%
-l|espresso|Espresso|46.7 23.1% 92.4%|180 37.9% 17.1%|45 22.2% 96.5%|195.8 20.4% 36.5%|45 7.3% 78.4%|0 27.4% 48.6%
-l|eyehealth|EyeHealth|47 100% 95.5%|22.4 31.2% 42.2%|48 100% 98%|35.8 100% 50%|48 20.8% 81.2%|354 67% 56.1%
-l|flexoki|Flexoki|48 100% 97.1%|0 3.2% 6.1%|51.4 100% 98.6%|45.3 98.9% 34.1%|46.2 14.6% 82.5%|3.1 62% 42.4%
-l|fox|Fox|30 30.8% 94.9%|263 35.3% 26.1%|30 33.3% 97.6%|28.9 97.7% 34.1%|34.3 7.1% 80.6%|354 65.8% 39%
-l|garbage-oracle|Garbage Oracle|303.8 38.1% 91.8%|320.9 100% 26.5%|300 36.8% 96.3%|22.7 66.2% 29%|304.3 12.5% 78%|352.2 54.7% 41.6%
-l|github|GitHub|0 0% 100%|213.3 12.7% 13.9%|0 0% 100%|212.4 92.1% 44.5%|0 0% 85.1%|355.8 71.8% 47.3%
-l|gruvbox-material|Gruvbox Material|48.5 86.7% 88.2%|22.5 31.2% 30.2%|49.6 85.2% 94.7%|36.5 90.5% 37.1%|49.1 34.4% 74.9%|0 49% 52.4%
-l|homebrew|Homebrew|120 40% 94.1%|120 65.8% 14.9%|120 38.5% 97.5%|300 100% 23.5%|120 9.8% 80%|0 100% 23.9%
-l|ic-orange-ppl|IC Orange PPL|35 40% 94.1%|34.8 65.8% 14.9%|36 38.5% 97.5%|24 100% 23.5%|36 9.8% 80%|14.1 100% 26.7%
-l|ikki|IKKI|43.6 100% 97.8%|22.4 31.2% 42.2%|48 100% 99%|35.8 100% 50%|42 11.6% 83.1%|354 67% 56.1%
-l|kanso-ink|Kanso Ink|40 10.3% 94.3%|218.2 13.9% 15.5%|60 7.7% 97.5%|351.6 55.3% 51.8%|40 3% 80.2%|351.6 55.3% 51.8%
-l|kary-pro-colors|Kary Pro Colors|207.3 57.9% 96.3%|209.5 53.8% 46.7%|204 55.6% 98.2%|32.7 76.5% 36.7%|206.7 9.7% 81.8%|13.1 69.6% 46.5%
-l|light-purple|Light purple|10 15.8% 92.5%|274.8 33.8% 29%|20 17.6% 96.7%|46.8 98.2% 44.3%|12 4.6% 78.6%|0.7 71.2% 55.1%
-l|mondrian|Mondrian|0 0% 100%|0 0% 0%|0 0% 100%|217.4 89% 60.8%|0 0% 85.1%|4.8 69.5% 53.7%
-l|monochrome|Monochrome|210 40% 96.1%|222.2 47.4% 11.2%|200 33.3% 98.2%|222.2 47.4% 11.2%|214.3 7.5% 81.8%|222.2 47.4% 11.2%
-l|monochrome-stone|Monochrome Stone|60 4.8% 95.9%|24 9.8% 10%|60 11.1% 98.2%|24 9.8% 10%|60 1.1% 81.4%|24 9.8% 10%
-l|monokai-pro-spectrum|Monokai Pro Spectrum|28.2 54.8% 93.9%|289.1 13.6% 15.9%|30 57.1% 97.3%|34.8 96.7% 35.3%|28 14.6% 79.8%|341.8 57.9% 54.3%
-l|monospace|Monospace|0 0% 100%|216.9 29.5% 17.3%|0 0% 100%|196.7 100% 31.8%|0 0% 85.1%|356.8 61.6% 52%
-l|noctis-azureus|Noctis Azureus|40 90% 96.1%|186.8 100% 19%|40 100% 98.2%|203 100% 47.1%|40 16.1% 81.8%|15.1 78% 50%
-l|noctis-hibernus|Noctis Hibernus|180 10% 96.1%|186.8 100% 19%|180 11.1% 98.2%|203 100% 47.1%|180 2.1% 81.6%|15.1 78% 50%
-l|noir-essence|Noir Essence|41.5 44.8% 94.3%|0 0% 0%|48 38.5% 97.5%|54.1 100% 23.9%|43.6 10.9% 80.2%|3 56.6% 58.4%
-l|nord-midnight|Nord Midnight|217.5 26.7% 94.1%|220 16.4% 21.6%|210 28.6% 97.3%|187.1 83% 30%|220 5.9% 80%|354.3 42.3% 56.5%
-l|notionish|Notionish|0 0% 100%|60 2% 9.6%|0 0% 100%|208.4 100% 43.5%|0 0% 85.1%|7.2 83.8% 48.4%
-l|phonebook|Phonebook|35.6 37.2% 83.1%|31.3 45.1% 20%|36 38.5% 92.4%|186.5 100% 37.8%|35.6 18.1% 70.8%|4 89.9% 61%
-l|polychrome|Polychrome|30 20% 98%|255.6 60% 44.1%|60 20% 99%|255.3 86.5% 59.2%|60 1.2% 83.3%|0 90.2% 56.1%
-l|purplepeter|Purplepeter|261.8 40.7% 94.7%|258.6 55.3% 14.9%|264 38.5% 97.5%|190.2 83.9% 31.6%|260 9.1% 80.6%|0 41.9% 48.6%
-l|rainglow-codecourse|Rainglow Codecourse|0 0% 100%|197.7 26.6% 44.9%|0 0% 100%|202.7 97.4% 55.3%|0 0% 85.1%|348.8 86% 39.2%
-l|rainglow-crisp|Rainglow Crisp|0 0% 100%|300 13.3% 11.8%|0 0% 100%|23 97.5% 52.4%|0 0% 85.1%|348.8 86% 39.2%
-l|rainglow-lavender|Rainglow Lavender|0 0% 100%|275 15% 15.7%|0 0% 100%|273.9 100% 67.1%|0 0% 85.1%|348.8 86% 39.2%
-l|remedy-tilted|Remedy Tilted|41.1 90.5% 95.9%|39.2 72% 19.6%|40 100% 98.2%|24.6 65.8% 62.2%|41.2 17% 81.6%|0 42.9% 45.3%
-l|rose-pine|Rosé Pine|32.3 56.5% 95.5%|247.7 19.2% 39.8%|30 60% 98%|34.6 81.2% 56.1%|30 12.5% 81.2%|343 35.1% 54.7%
-l|selene-selenized|Selene Selenized|41.7 94.7% 92.5%|193.8 18.8% 27.1%|42.4 100% 96.7%|207.1 100% 41.2%|42.6 28.4% 78.6%|356.6 73.1% 48%
-l|soft-color|Soft Color|95 100% 97.6%|0 0% 35.3%|96 100% 99%|211.3 95.3% 33.1%|96 11.6% 83.1%|0 61.4% 49.8%
-l|tearout|Tearout|96.9 26.5% 90.4%|90 7.9% 14.9%|100 27.3% 95.7%|22.5 36.4% 34.5%|92.7 9.2% 76.7%|6.7 33.3% 42.4%
-l|tokyo-night|Tokyo Night|230 11.1% 89.4%|221.9 55.3% 48.2%|240 8.3% 95.3%|195.1 100% 29.6%|228 4.1% 75.9%|342.6 91% 56.3%
-l|tomorrow-night-eighties|Tomorrow Night Eighties|0 0% 100%|60 0.7% 30%|0 0% 100%|71.6 100% 27.5%|0 0% 85.1%|359.6 66.7% 47.1%
-l|vaporizer-turquoise|Vaporizer Turquoise|0 0% 95.3%|117.5 50% 18.8%|0 0% 98%|300 94.8% 37.8%|0 0% 81.2%|0 61.4% 49.8%
-l|xotopio|Xotopio|20 15.8% 96.3%|0 0% 12.9%|60 11.1% 98.2%|331 64.2% 55.1%|20 3.2% 81.8%|0.7 71.2% 55.1%
-l|yuttari|Yuttari|336.7 100% 96.5%|334.3 10.4% 26.3%|337.5 100% 98.4%|223.5 30.4% 60%|337.5 17.4% 82%|0 38.8% 54.5%
-l|zenbones-rosebones|Zenbones Rosebones|32.7 57.9% 96.3%|2.4 27.4% 35.1%|36 55.6% 98.2%|34.4 83% 56.3%|33.3 9.7% 81.8%|343.2 35.7% 54.9%
-l|zhxo-red|Zhxo'red|24 100% 97.1%|240 10.1% 51.6%|25.7 100% 98.6%|284.1 83.8% 45.9%|23.1 14.6% 82.5%|0 53.4% 50.4%
-d|pure-black|Pure Black|0 0% 0%|0 0% 95%|0 0% 5%|210 90% 60%|0 0% 12%|0 70% 50%
-d|midnight|Midnight|220 28% 10%|210 40% 95%|220 22% 12%|200 100% 61%|220 22% 18%|0 70% 50%
-d|deep-blue|Deep Blue|220 35% 10%|210 40% 96%|220 28% 14%|210 90% 60%|220 20% 22%|0 70% 50%
-d|vscode|VS Code|0 0% 12%|210 20% 92%|0 0% 16%|210 90% 60%|0 0% 22%|0 70% 50%
-d|graphite|Graphite|220 8% 12%|210 20% 94%|220 8% 16%|210 80% 60%|220 6% 22%|0 70% 50%
-d|obsidian|Obsidian|240 8% 8%|210 20% 94%|240 8% 12%|265 80% 65%|240 6% 20%|0 70% 50%
-d|forest|Forest|150 12% 10%|150 20% 92%|150 12% 14%|160 70% 50%|150 8% 22%|0 70% 50%
-d|a-cup-of-coffee|A cup of coffee|0 0% 11.8%|0 0% 74.5%|0 0% 15.7%|60 86.9% 48%|0 0% 29.4%|0 61.4% 49.8%
-d|abolkog|ABOLKOG|220 13% 18%|218.8 27.9% 88%|223.6 9.9% 21.8%|40 70.6% 73.3%|222 5.7% 34.5%|354.3 42.3% 56.5%
-d|aurora|Aurora|223.6 13.6% 15.9%|45.2 100% 57.8%|222 10% 19.6%|171.5 97.2% 42.5%|226.7 5.4% 32.7%|338.3 87.1% 54.5%
-d|ayu|Ayu|222.4 21.5% 15.5%|48 8.9% 78%|221.3 16.3% 19.2%|271.3 95.9% 80.8%|221.5 7.9% 32.4%|6.1 83.1% 65.1%
-d|base16-flat|Base16 Flat|210 29% 24.3%|0 0% 87.8%|209.1 24.8% 27.6%|168.1 75.7% 42%|209 14.4% 39.4%|5.6 78.1% 57.1%
-d|base16-mocha|Base16 Mocha|31.6 19.2% 19.4%|12 9.6% 79.6%|30 15.3% 23.1%|16.1 51.9% 63.3%|32 8.3% 35.5%|347.1 50.7% 58.6%
-d|blue-dolphin|Blue Dolphin|192.3 100% 25.9%|193.4 100% 88.6%|192.3 85.2% 29.2%|218.8 100% 83.3%|192.5 51% 40.8%|357.1 100% 75.5%
-d|calm-days-sober-nights-sky|Calm Days, Sober Nights Sky|221.7 31.5% 14.3%|220 31.3% 86.9%|220.9 23.9% 18%|198 93.3% 70.6%|220 11.2% 31.4%|354 77.1% 69.2%
-d|catppuccin|Catppuccin|229.1 18.6% 23.1%|227.2 70.1% 86.9%|228.6 15.6% 26.5%|316 73.2% 83.9%|226.7 9.2% 38.4%|358.8 67.8% 70.8%
-d|chai|Chai|240 75% 1.6%|203.6 27.5% 80%|240 20% 5.9%|202.9 78.4% 60%|240 4.6% 21.4%|16.8 78.2% 55.1%
-d|chinolor|Chinolor|130 6.5% 18%|36.9 19.4% 86.9%|120 4.5% 21.8%|44.4 92.4% 69%|132 2.9% 34.3%|355.2 83.7% 59%
-d|cyberdyne|Cyberdyne|244.7 60% 16.7%|154.4 100% 50%|245 46.2% 20.4%|300.5 100% 78.2%|244.5 23.5% 33.3%|6.9 100% 72.5%
-d|desert|Desert|0 0% 20%|0 0% 100%|0 0% 23.5%|35.9 100% 83.9%|0 0% 36.1%|0 100% 58.4%
-d|django-reborn-again|Django Reborn Again|154.6 72.2% 7.1%|150 5.7% 86.3%|156 43.9% 11.2%|51.2 100% 69.2%|154.3 16% 25.7%|21.9 98.4% 51.4%
-d|espresso|Espresso|18 20% 9.8%|33.3 29.5% 76.1%|13.3 12.7% 13.9%|42.9 70.9% 69%|15 5.6% 27.8%|8.6 70.9% 69%
-d|eyehealth|EyeHealth|0 0% 25.9%|0 0% 100%|0 0% 29.4%|35.8 100% 50%|0 0% 40.8%|354 67% 56.1%
-d|flexoki|Flexoki|0 3.2% 6.1%|54.5 10.1% 78.6%|0 1.9% 10.4%|45.2 81.7% 44.9%|0 0.8% 24.9%|5 61% 53.7%
-d|fox|Fox|213.9 31.5% 14.3%|210 2% 80.8%|212.7 23.9% 18%|181.1 52.9% 60%|213.3 11.2% 31.4%|345.2 53% 54.9%
-d|garbage-oracle|Garbage Oracle|311.5 31% 16.5%|303.8 38.1% 91.8%|312 24.3% 20.2%|124.3 95.4% 82.9%|311.4 12.4% 33.1%|359.4 92.8% 78.2%
-d|github|GitHub|216 27.8% 7.1%|207.7 35.1% 92.7%|213.3 15.8% 11.2%|212 100% 67.3%|210 6.2% 25.5%|3.8 100% 72.4%
-d|gruvbox-material|Gruvbox Material|0 1.2% 15.9%|38 41.1% 71.4%|0 1% 19.8%|3.1 76.4% 65.1%|0 0.6% 32.7%|3.1 76.4% 65.1%
-d|homebrew|Homebrew|0 0% 0%|120 100% 50%|0 0% 4.3%|184 100% 34.9%|0 0% 20%|0 100% 30%
-d|ic-orange-ppl|IC Orange PPL|0 0% 14.9%|34.8 100% 75.7%|0 0% 18.8%|36.2 100% 48.4%|0 0% 31.8%|17.7 100% 37.8%
-d|ikki|IKKI|0 0% 32.5%|0 0% 83.9%|0 0% 35.7%|35.8 100% 50%|0 0% 45.9%|354 67% 56.1%
-d|kanso-ink|Kanso Ink|220 18.4% 9.6%|150 3.6% 78%|225 11.4% 13.7%|41.4 33% 65.5%|222.9 5% 27.6%|4.2 42.2% 60%
-d|kary-pro-colors|Kary Pro Colors|0 0% 10.2%|0 0% 80%|0 0% 14.1%|15.8 54.6% 62%|0 0% 28.2%|15.8 54.6% 62%
-d|light-purple|Light purple|293.3 18% 19.6%|0 100% 94.5%|292.9 14.3% 23.3%|191.2 74.1% 77.3%|295.7 7.7% 35.7%|348 69.3% 60.4%
-d|mondrian|Mondrian|240 27.8% 14.1%|0 0% 100%|240 20.9% 17.8%|186.5 100% 37.8%|240 10% 31.4%|4.6 81.2% 56.3%
-d|monochrome|Monochrome|222.2 47.4% 11.2%|210 40% 96.1%|223.8 33.3% 15.3%|210 40% 96.1%|223.6 14.9% 29%|210 40% 96.1%
-d|monochrome-stone|Monochrome Stone|24 9.8% 10%|60 4.8% 95.9%|24 7% 13.9%|60 4.8% 95.9%|30 2.8% 27.8%|60 4.8% 95.9%
-d|monokai-pro-spectrum|Monokai Pro Spectrum|0 0% 13.3%|265.7 100% 97.3%|0 0% 17.3%|22.6 97.7% 65.9%|0 0% 30.6%|343 96.3% 68.4%
-d|monospace|Monospace|216 30.3% 12.9%|214.3 22.6% 87.8%|216 23.3% 16.9%|227 100% 72%|213.8 10.4% 30.2%|359.2 90% 68.6%
-d|noctis-azureus|Noctis Azureus|203.1 78.8% 12.9%|203.6 27.5% 80%|202.8 58.1% 16.9%|187.1 78.4% 60%|203.4 26.5% 30.4%|16.8 78.2% 55.1%
-d|noctis-hibernus|Noctis Hibernus|246.9 25.5% 20%|249 19.6% 80%|247.2 20.7% 23.7%|187.1 78.4% 60%|248.6 11.5% 35.9%|16.8 78.2% 55.1%
-d|noir-essence|Noir Essence|200 8.1% 7.3%|41.5 44.8% 94.3%|200 5.1% 11.6%|23.5 76.1% 60.6%|210 1.5% 25.9%|3.1 76.4% 65.1%
-d|nord-midnight|Nord Midnight|220 14.8% 12%|218.8 27.9% 88%|220 11.1% 15.9%|40 70.6% 73.3%|222.9 4.6% 29.6%|354.3 42.3% 56.5%
-d|notionish|Notionish|60 2% 9.6%|30 10% 96.1%|60 1.4% 13.5%|39.9 100% 68.4%|60 0.7% 27.6%|6.9 90.2% 67.8%
-d|phonebook|Phonebook|27.3 14.3% 15.1%|43 71.4% 67.1%|30 10.4% 18.8%|186.5 100% 37.8%|26.7 5.5% 32%|4 89.9% 61%
-d|polychrome|Polychrome|250.9 12.1% 17.8%|251.7 31.6% 77.6%|252 9.1% 21.6%|47.7 100% 76.1%|253.3 5.1% 34.3%|9.1 100% 63.9%
-d|purplepeter|Purplepeter|260 48% 19.6%|255.8 65.5% 94.3%|260.9 39% 23.1%|264 100% 77.5%|260.5 20.9% 35.7%|4.9 100% 71.4%
-d|rainglow-codecourse|Rainglow Codecourse|204 33.3% 2.9%|197.6 30.4% 78%|204 13.5% 7.3%|202.7 97.4% 55.3%|210 3.5% 22.4%|348.8 86% 39.2%
-d|rainglow-crisp|Rainglow Crisp|300 14.3% 4.1%|0 0% 100%|300 7% 8.4%|23 97.5% 52.4%|300 2.5% 23.3%|348.8 86% 39.2%
-d|rainglow-lavender|Rainglow Lavender|270 12.5% 3.1%|274.8 46.3% 86.9%|270 5.3% 7.5%|273.9 100% 67.1%|240 0.9% 22.5%|348.8 86% 39.2%
-d|remedy-tilted|Remedy Tilted|5 10.5% 22.4%|39.4 80.7% 83.7%|5 9.1% 25.9%|24.6 65.8% 62.2%|6.7 4.7% 37.8%|0 42.9% 45.3%
-d|rose-pine|Rosé Pine|249.2 22% 11.6%|245.5 50% 91.4%|249.2 16.5% 15.5%|35 87.6% 71.6%|250.9 7.4% 29.2%|343.1 75.6% 67.8%
-d|selene-selenized|Selene Selenized|189.9 87% 15.1%|183.8 17% 81.6%|189.4 66.7% 18.8%|203.3 100% 48%|190 32.9% 32.2%|2.7 97.8% 64.9%
-d|soft-color|Soft Color|0 0% 14.5%|151.2 100% 95.1%|0 0% 18.4%|60 86.9% 48%|0 0% 31.8%|0 61.4% 49.8%
-d|tearout|Tearout|85 11.8% 20%|30.9 76.1% 82%|85 10% 23.5%|46.4 51.2% 67.8%|84 5.4% 36.1%|20 44.3% 64.1%
-d|tokyo-night|Tokyo Night|235 18.8% 12.5%|228.7 72.6% 85.7%|235 14.3% 16.5%|202.2 100% 74.5%|233.3 5.9% 30%|348.8 89% 71.6%
-d|tomorrow-night-eighties|Tomorrow Night Eighties|0 0% 17.6%|0 0% 80%|0 0% 21.2%|40 100% 70%|0 0% 34.1%|358.5 82.6% 70.8%
-d|vaporizer-turquoise|Vaporizer Turquoise|0 0% 9.8%|110.8 31.7% 67.8%|0 0% 13.7%|151.9 100% 36.9%|0 0% 27.8%|0 61.4% 49.8%
-d|xotopio|Xotopio|233.3 69.2% 5.1%|0 0% 100%|232.9 36.2% 9.2%|195.1 100% 66.5%|232 12.2% 24.1%|327.7 100% 48.8%
-d|yuttari|Yuttari|320 11.1% 10.6%|336.7 100% 96.5%|320 8.1% 14.5%|38.5 43.3% 64.7%|324 3.4% 28.4%|0 41.1% 58%
-d|zenbones-rosebones|Zenbones Rosebones|249.2 21.3% 12%|0 17.8% 85.7%|249.2 16% 15.9%|35.1 87.8% 71%|250.9 7.3% 29.6%|343.3 75.3% 68.2%
-d|zhxo-red|Zhxo'red|240 5.5% 10.8%|0 0% 67.1%|240 4% 14.7%|182.7 86% 44.9%|240 1.4% 28.6%|0 72.6% 55.7%
-''';
+List<Color> _palette(List<int> values) =>
+    List<Color>.unmodifiable(values.map(Color.new));
+
+NetcattyThemePreset _theme(
+  String id,
+  String name,
+  Brightness brightness, {
+  required int background,
+  required int card,
+  required int foreground,
+  required int primary,
+  required int border,
+  required int error,
+  required List<int> ansi,
+}) =>
+    NetcattyThemePreset(
+      id: id,
+      name: name,
+      brightness: brightness,
+      background: Color(background),
+      card: Color(card),
+      foreground: Color(foreground),
+      primary: Color(primary),
+      border: Color(border),
+      error: Color(error),
+      ansi: _palette(ansi),
+    );
+
+const _l = Brightness.light;
+const _d = Brightness.dark;
+
+/// A short list of light/dark pairs that read well for code. Each id exists
+/// in both lists so one choice covers light and dark mode.
+final _light = <NetcattyThemePreset>[
+  _theme('claude', 'Claude', _l,
+      background: 0xfff9f9f7,
+      card: 0xffffffff,
+      foreground: 0xff141413,
+      primary: 0xffc6613f,
+      border: 0xffe6e5e0,
+      error: 0xffc33b3b,
+      ansi: [
+        0xff141413, 0xffc7372f, 0xff3d8a2e, 0xff9a6b00, //
+        0xff2e62c9, 0xffa23ca8, 0xff1a8a8a, 0xff8a8983, //
+        0xff5c5b56, 0xffe0493f, 0xff4fa33c, 0xffb7860b, //
+        0xff4a7fe0, 0xffba55c0, 0xff23a3a3, 0xffb5b4ad,
+      ]),
+  _theme('github', 'GitHub', _l,
+      background: 0xfff6f8fa,
+      card: 0xffffffff,
+      foreground: 0xff1f2328,
+      primary: 0xff0969da,
+      border: 0xffd0d7de,
+      error: 0xffcf222e,
+      ansi: [
+        0xff24292f, 0xffcf222e, 0xff116329, 0xff4d2d00, //
+        0xff0969da, 0xff8250df, 0xff1b7c83, 0xff6e7781, //
+        0xff57606a, 0xffa40e26, 0xff1a7f37, 0xff633c01, //
+        0xff218bff, 0xffa475f9, 0xff3192aa, 0xff8c959f,
+      ]),
+  _theme('one', 'One', _l,
+      background: 0xffeaeaeb,
+      card: 0xfffafafa,
+      foreground: 0xff383a42,
+      primary: 0xff4078f2,
+      border: 0xffdbdbdc,
+      error: 0xffe45649,
+      ansi: [
+        0xff383a42, 0xffe45649, 0xff50a14f, 0xffc18401, //
+        0xff4078f2, 0xffa626a4, 0xff0184bc, 0xffa0a1a7, //
+        0xff4f525e, 0xffca1243, 0xff3e953a, 0xff986801, //
+        0xff2f5af3, 0xff9a1a99, 0xff0997b3, 0xff8e8f96,
+      ]),
+  _theme('tokyo-night', 'Tokyo Night', _l,
+      background: 0xffd0d5e3,
+      card: 0xffe1e2e7,
+      foreground: 0xff3760bf,
+      primary: 0xff2e7de9,
+      border: 0xffc4c8da,
+      error: 0xfff52a65,
+      ansi: [
+        0xff343b58, 0xfff52a65, 0xff587539, 0xff8c6c3e, //
+        0xff2e7de9, 0xff9854f1, 0xff007197, 0xff6172b0, //
+        0xff4c505e, 0xfff52a65, 0xff587539, 0xff8c6c3e, //
+        0xff2e7de9, 0xff9854f1, 0xff007197, 0xffa1a6c5,
+      ]),
+  _theme('catppuccin', 'Catppuccin', _l,
+      background: 0xffe6e9ef,
+      card: 0xffeff1f5,
+      foreground: 0xff4c4f69,
+      primary: 0xff8839ef,
+      border: 0xffccd0da,
+      error: 0xffd20f39,
+      ansi: [
+        0xff5c5f77, 0xffd20f39, 0xff40a02b, 0xffdf8e1d, //
+        0xff1e66f5, 0xffea76cb, 0xff179299, 0xffacb0be, //
+        0xff6c6f85, 0xffd20f39, 0xff40a02b, 0xffdf8e1d, //
+        0xff1e66f5, 0xffea76cb, 0xff179299, 0xffbcc0cc,
+      ]),
+  _theme('dracula', 'Dracula', _l,
+      background: 0xfff5f1df,
+      card: 0xfffffbeb,
+      foreground: 0xff1f1f1f,
+      primary: 0xff644ac9,
+      border: 0xffdedccf,
+      error: 0xffcb3a2a,
+      ansi: [
+        0xff1f1f1f, 0xffcb3a2a, 0xff14710a, 0xff846e15, //
+        0xff644ac9, 0xffa3144d, 0xff036a96, 0xff6c664b, //
+        0xff635d97, 0xffd74c3d, 0xff198d0c, 0xff9e841a, //
+        0xff7862d0, 0xffbf185a, 0xff047fb4, 0xff8a8463,
+      ]),
+  _theme('nord', 'Nord', _l,
+      background: 0xffe5e9f0,
+      card: 0xffeceff4,
+      foreground: 0xff2e3440,
+      primary: 0xff5e81ac,
+      border: 0xffd8dee9,
+      error: 0xffbf616a,
+      ansi: [
+        0xff2e3440, 0xffb04a55, 0xff5e7d45, 0xff9a7426, //
+        0xff4c6e94, 0xff8c6585, 0xff3b7e8c, 0xff7b8394, //
+        0xff4c566a, 0xffbf616a, 0xff6e8f4f, 0xffaf8a3c, //
+        0xff5e81ac, 0xffa07397, 0xff4c8e9c, 0xff9aa2b4,
+      ]),
+  _theme('gruvbox', 'Gruvbox', _l,
+      background: 0xfff2e5bc,
+      card: 0xfffbf1c7,
+      foreground: 0xff3c3836,
+      primary: 0xffaf3a03,
+      border: 0xffd5c4a1,
+      error: 0xff9d0006,
+      ansi: [
+        0xff3c3836, 0xffcc241d, 0xff98971a, 0xffd79921, //
+        0xff458588, 0xffb16286, 0xff689d6a, 0xff7c6f64, //
+        0xff928374, 0xff9d0006, 0xff79740e, 0xffb57614, //
+        0xff076678, 0xff8f3f71, 0xff427b58, 0xff665c54,
+      ]),
+];
+
+final _dark = <NetcattyThemePreset>[
+  _theme('claude', 'Claude', _d,
+      background: 0xff151515,
+      card: 0xff20201f,
+      foreground: 0xfff8f8f6,
+      primary: 0xffd97757,
+      border: 0xff2e2e2c,
+      error: 0xffe5534b,
+      ansi: [
+        0xff4a4945, 0xffe06c64, 0xff8fbf7a, 0xffe5c07b, //
+        0xff7aa2e3, 0xffc792c9, 0xff6fc0c0, 0xffd8d6cf, //
+        0xff6e6c66, 0xfff08a80, 0xffa8d48f, 0xfff0d290, //
+        0xff98b8f0, 0xffd9a8db, 0xff8dd5d5, 0xfff8f8f6,
+      ]),
+  _theme('github', 'GitHub', _d,
+      background: 0xff010409,
+      card: 0xff0d1117,
+      foreground: 0xffe6edf3,
+      primary: 0xff4493f8,
+      border: 0xff30363d,
+      error: 0xfff85149,
+      ansi: [
+        0xff484f58, 0xffff7b72, 0xff3fb950, 0xffd29922, //
+        0xff58a6ff, 0xffbc8cff, 0xff39c5cf, 0xffb1bac4, //
+        0xff6e7681, 0xffffa198, 0xff56d364, 0xffe3b341, //
+        0xff79c0ff, 0xffd2a8ff, 0xff56d4dd, 0xfff0f6fc,
+      ]),
+  _theme('one', 'One', _d,
+      background: 0xff21252b,
+      card: 0xff282c34,
+      foreground: 0xffabb2bf,
+      primary: 0xff61afef,
+      border: 0xff3e4451,
+      error: 0xffe06c75,
+      ansi: [
+        0xff5c6370, 0xffe06c75, 0xff98c379, 0xffe5c07b, //
+        0xff61afef, 0xffc678dd, 0xff56b6c2, 0xffabb2bf, //
+        0xff7f848e, 0xfff08c93, 0xffafd490, 0xfff0d197, //
+        0xff82c1f3, 0xffd49be6, 0xff7acad3, 0xffe6e6e6,
+      ]),
+  _theme('tokyo-night', 'Tokyo Night', _d,
+      background: 0xff16161e,
+      card: 0xff1a1b26,
+      foreground: 0xffc0caf5,
+      primary: 0xff7aa2f7,
+      border: 0xff292e42,
+      error: 0xfff7768e,
+      ansi: [
+        0xff32344a, 0xfff7768e, 0xff9ece6a, 0xffe0af68, //
+        0xff7aa2f7, 0xffbb9af7, 0xff7dcfff, 0xffa9b1d6, //
+        0xff414868, 0xfff7768e, 0xff9ece6a, 0xffe0af68, //
+        0xff7aa2f7, 0xffbb9af7, 0xff7dcfff, 0xffc0caf5,
+      ]),
+  _theme('catppuccin', 'Catppuccin', _d,
+      background: 0xff181825,
+      card: 0xff1e1e2e,
+      foreground: 0xffcdd6f4,
+      primary: 0xffcba6f7,
+      border: 0xff313244,
+      error: 0xfff38ba8,
+      ansi: [
+        0xff45475a, 0xfff38ba8, 0xffa6e3a1, 0xfff9e2af, //
+        0xff89b4fa, 0xfff5c2e7, 0xff94e2d5, 0xffbac2de, //
+        0xff585b70, 0xfff38ba8, 0xffa6e3a1, 0xfff9e2af, //
+        0xff89b4fa, 0xfff5c2e7, 0xff94e2d5, 0xffa6adc8,
+      ]),
+  _theme('dracula', 'Dracula', _d,
+      background: 0xff21222c,
+      card: 0xff282a36,
+      foreground: 0xfff8f8f2,
+      primary: 0xffbd93f9,
+      border: 0xff44475a,
+      error: 0xffff5555,
+      ansi: [
+        0xff44475a, 0xffff5555, 0xff50fa7b, 0xfff1fa8c, //
+        0xffbd93f9, 0xffff79c6, 0xff8be9fd, 0xfff8f8f2, //
+        0xff6272a4, 0xffff6e6e, 0xff69ff94, 0xffffffa5, //
+        0xffd6acff, 0xffff92df, 0xffa4ffff, 0xffffffff,
+      ]),
+  _theme('nord', 'Nord', _d,
+      background: 0xff2e3440,
+      card: 0xff3b4252,
+      foreground: 0xffeceff4,
+      primary: 0xff88c0d0,
+      border: 0xff4c566a,
+      error: 0xffbf616a,
+      ansi: [
+        0xff4c566a, 0xffbf616a, 0xffa3be8c, 0xffebcb8b, //
+        0xff81a1c1, 0xffb48ead, 0xff88c0d0, 0xffe5e9f0, //
+        0xff616e88, 0xffbf616a, 0xffa3be8c, 0xffebcb8b, //
+        0xff81a1c1, 0xffb48ead, 0xff8fbcbb, 0xffeceff4,
+      ]),
+  _theme('gruvbox', 'Gruvbox', _d,
+      background: 0xff1d2021,
+      card: 0xff282828,
+      foreground: 0xffebdbb2,
+      primary: 0xfffe8019,
+      border: 0xff3c3836,
+      error: 0xfffb4934,
+      ansi: [
+        0xff3c3836, 0xffcc241d, 0xff98971a, 0xffd79921, //
+        0xff458588, 0xffb16286, 0xff689d6a, 0xffa89984, //
+        0xff928374, 0xfffb4934, 0xffb8bb26, 0xfffabd2f, //
+        0xff83a598, 0xffd3869b, 0xff8ec07c, 0xffebdbb2,
+      ]),
+];

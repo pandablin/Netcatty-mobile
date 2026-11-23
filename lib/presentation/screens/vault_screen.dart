@@ -11,6 +11,7 @@ import '../../application/home_navigation.dart';
 import '../../application/host_sorting.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/host_editor.dart';
+import '../theme.dart';
 import '../widgets/glass.dart';
 import '../widgets/host_system_icon.dart';
 
@@ -85,9 +86,13 @@ class _VaultScreenState extends ConsumerState<VaultScreen> {
                 const SizedBox(width: 10),
                 LText(
                   'Netcatty',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+                  // Serif wordmark, like the "Claude" title in Claude's app.
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        fontFamily: NetcattyTheme.displayFont,
+                        fontSize: 26,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: -0.3,
+                      ),
                 ),
                 const Spacer(),
                 PopupMenuButton<String>(

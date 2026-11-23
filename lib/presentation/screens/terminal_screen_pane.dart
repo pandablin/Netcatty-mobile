@@ -362,27 +362,31 @@ class _TerminalPaneState extends State<_TerminalPane> {
     final scheme = Theme.of(context).colorScheme;
     final paneBackground =
         widget.transparentBackground ? Colors.transparent : scheme.surface;
+    // Each theme has its own ANSI palette, tuned for its background (light
+    // themes need darker yellows and whites to stay readable).
+    final ansi = Theme.of(context).extension<TerminalPalette>()?.ansi ??
+        NetcattyTheme.presets(Theme.of(context).brightness).first.ansi;
     final terminalTheme = TerminalTheme(
       cursor: scheme.primary,
       selection: scheme.primary.withValues(alpha: 0.35),
       foreground: scheme.onSurface,
       background: scheme.surface,
-      black: const Color(0xff1d1f21),
-      red: const Color(0xffcc6666),
-      green: const Color(0xffb5bd68),
-      yellow: const Color(0xfff0c674),
-      blue: const Color(0xff81a2be),
-      magenta: const Color(0xffb294bb),
-      cyan: const Color(0xff8abeb7),
-      white: const Color(0xffc5c8c6),
-      brightBlack: const Color(0xff666666),
-      brightRed: const Color(0xffd54e53),
-      brightGreen: const Color(0xffb9ca4a),
-      brightYellow: const Color(0xffe7c547),
-      brightBlue: const Color(0xff7aa6da),
-      brightMagenta: const Color(0xffc397d8),
-      brightCyan: const Color(0xff70c0b1),
-      brightWhite: const Color(0xffeaeaea),
+      black: ansi[0],
+      red: ansi[1],
+      green: ansi[2],
+      yellow: ansi[3],
+      blue: ansi[4],
+      magenta: ansi[5],
+      cyan: ansi[6],
+      white: ansi[7],
+      brightBlack: ansi[8],
+      brightRed: ansi[9],
+      brightGreen: ansi[10],
+      brightYellow: ansi[11],
+      brightBlue: ansi[12],
+      brightMagenta: ansi[13],
+      brightCyan: ansi[14],
+      brightWhite: ansi[15],
       searchHitBackground: scheme.tertiaryContainer,
       searchHitBackgroundCurrent: scheme.primaryContainer,
       searchHitForeground: scheme.onSurface,

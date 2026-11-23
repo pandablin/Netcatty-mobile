@@ -1,4 +1,6 @@
 const englishTranslations = <String, String>{
+  '每个主题都有配套的浅色和深色版本，以及终端配色':
+      'Every theme has matching light and dark versions and terminal colours',
   '按名称排序': 'Sort by name',
   '按最近连接排序': 'Sort by last connected',
   '自定义顺序': 'Custom order',

@@ -13,7 +13,11 @@ class GlassStyle {
     final surface = theme.colorScheme.surface;
     return GlassStyle._(
       surface.withValues(alpha: opacity),
-      Colors.white.withValues(alpha: dark ? 0.14 : 0.75),
+      // Hairline outline like Claude's round buttons: dark on light
+      // surfaces, a faint highlight on dark ones.
+      dark
+          ? Colors.white.withValues(alpha: 0.12)
+          : Colors.black.withValues(alpha: 0.07),
       Colors.white.withValues(alpha: dark ? 0.06 : 0.35),
       Colors.black.withValues(alpha: dark ? 0.38 : 0.10),
     );
