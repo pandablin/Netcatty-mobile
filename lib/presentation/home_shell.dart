@@ -79,15 +79,12 @@ class HomeShell extends ConsumerWidget {
             ),
           ],
         ),
-        bottomNavigationBar: hideNavigation
-            ? null
-            : _navigationBar(ref, index),
+        bottomNavigationBar: hideNavigation ? null : _navigationBar(ref, index),
       ),
     );
   }
 
-  Widget _navigationBar(WidgetRef ref, int selectedIndex) =>
-      GlassTabBar(
+  Widget _navigationBar(WidgetRef ref, int selectedIndex) => GlassTabBar(
         key: const ValueKey('home-navigation-bar'),
         selectedIndex: selectedIndex,
         onSelected: (value) => ref.read(homeTabProvider.notifier).state = value,

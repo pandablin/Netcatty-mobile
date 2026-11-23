@@ -239,8 +239,8 @@ class GlassTabBar extends StatelessWidget {
                         color: scheme.onSurface
                             .withValues(alpha: dark ? 0.12 : 0.07),
                         border: Border.all(
-                          color: Colors.white
-                              .withValues(alpha: dark ? 0.10 : 0.6),
+                          color:
+                              Colors.white.withValues(alpha: dark ? 0.10 : 0.6),
                           width: 0.8,
                         ),
                       ),

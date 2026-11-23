@@ -245,7 +245,8 @@ class _VaultScreenState extends ConsumerState<VaultScreen> {
                             ref.read(vaultControllerProvider.notifier).load(),
                         child: switch (viewMode) {
                           'grid' => GridView.builder(
-                              padding: EdgeInsets.fromLTRB(12, 8, 12, listBottom),
+                              padding:
+                                  EdgeInsets.fromLTRB(12, 8, 12, listBottom),
                               gridDelegate:
                                   SliverGridDelegateWithMaxCrossAxisExtent(
                                 maxCrossAxisExtent: 230,
@@ -278,7 +279,8 @@ class _VaultScreenState extends ConsumerState<VaultScreen> {
                               onEdit: _editHost,
                             ),
                           _ => ListView.separated(
-                              padding: EdgeInsets.fromLTRB(12, 8, 12, listBottom),
+                              padding:
+                                  EdgeInsets.fromLTRB(12, 8, 12, listBottom),
                               itemCount: hosts.length,
                               separatorBuilder: (_, __) =>
                                   const SizedBox(height: 6),
@@ -1055,63 +1057,63 @@ class _HostCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) => PressScale(
         child: Card(
-        margin: EdgeInsets.zero,
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: onTap,
-          onLongPress: onLongPress,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(12, 10, 4, 10),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    _HostIcon(host: host, size: 32, connected: connected),
-                    const Spacer(),
-                    if (host.pinned) const Icon(Icons.push_pin, size: 14),
-                    IconButton(
-                      onPressed: onEdit,
-                      padding: EdgeInsets.zero,
-                      constraints:
-                          const BoxConstraints.tightFor(width: 32, height: 32),
-                      style: IconButton.styleFrom(
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          margin: EdgeInsets.zero,
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: onTap,
+            onLongPress: onLongPress,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(12, 10, 4, 10),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      _HostIcon(host: host, size: 32, connected: connected),
+                      const Spacer(),
+                      if (host.pinned) const Icon(Icons.push_pin, size: 14),
+                      IconButton(
+                        onPressed: onEdit,
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints.tightFor(
+                            width: 32, height: 32),
+                        style: IconButton.styleFrom(
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        iconSize: 20,
+                        icon: const Icon(Icons.more_horiz),
                       ),
-                      iconSize: 20,
-                      icon: const Icon(Icons.more_horiz),
-                    ),
-                  ],
-                ),
-                const Spacer(),
-                LText(
-                  host.label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                      fontWeight: FontWeight.w600, fontSize: 15),
-                ),
-                const SizedBox(height: 2),
-                LText(
-                  '${host.username}@${host.hostname}:${host.port}',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-                if (host.group?.isNotEmpty == true)
+                    ],
+                  ),
+                  const Spacer(),
                   LText(
-                    host.group!,
+                    host.label,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.primary,
-                      fontSize: 11,
-                    ),
+                    style: const TextStyle(
+                        fontWeight: FontWeight.w600, fontSize: 15),
                   ),
-              ],
+                  const SizedBox(height: 2),
+                  LText(
+                    '${host.username}@${host.hostname}:${host.port}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                  if (host.group?.isNotEmpty == true)
+                    LText(
+                      host.group!,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.primary,
+                        fontSize: 11,
+                      ),
+                    ),
+                ],
+              ),
             ),
           ),
-        ),
         ),
       );
 }
@@ -1133,24 +1135,24 @@ class _HostTile extends StatelessWidget {
   Widget build(BuildContext context) => PressScale(
         scale: 0.98,
         child: Card(
-        margin: EdgeInsets.zero,
-        child: ListTile(
-          dense: true,
-          visualDensity: const VisualDensity(vertical: -2),
-          contentPadding: const EdgeInsets.only(left: 12, right: 4),
-          onTap: onTap,
-          onLongPress: onLongPress,
-          leading: _HostIcon(host: host, size: 36, connected: connected),
-          title: LText(
-            host.label,
-            style: Theme.of(context).textTheme.titleSmall,
+          margin: EdgeInsets.zero,
+          child: ListTile(
+            dense: true,
+            visualDensity: const VisualDensity(vertical: -2),
+            contentPadding: const EdgeInsets.only(left: 12, right: 4),
+            onTap: onTap,
+            onLongPress: onLongPress,
+            leading: _HostIcon(host: host, size: 36, connected: connected),
+            title: LText(
+              host.label,
+              style: Theme.of(context).textTheme.titleSmall,
+            ),
+            subtitle: LText('${host.username}@${host.hostname}:${host.port}'),
+            trailing: IconButton(
+              onPressed: onEdit,
+              icon: const Icon(Icons.more_vert),
+            ),
           ),
-          subtitle: LText('${host.username}@${host.hostname}:${host.port}'),
-          trailing: IconButton(
-            onPressed: onEdit,
-            icon: const Icon(Icons.more_vert),
-          ),
-        ),
         ),
       );
 }
