@@ -293,8 +293,9 @@ class _VaultScreenState extends ConsumerState<VaultScreen> {
                 trailing: TextButton(
                   onPressed: () => setSheetState(
                     () => working.sort(
-                      (a, b) =>
-                          a.label.toLowerCase().compareTo(b.label.toLowerCase()),
+                      (a, b) => a.label
+                          .toLowerCase()
+                          .compareTo(b.label.toLowerCase()),
                     ),
                   ),
                   child: const LText('按名称重排'),

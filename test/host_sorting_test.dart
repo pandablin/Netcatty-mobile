@@ -3,7 +3,8 @@ import 'package:netcatty_mobile/application/host_sorting.dart';
 import 'package:netcatty_mobile/domain/models/host.dart';
 import 'package:netcatty_mobile/domain/models/settings.dart';
 
-HostProfile _host(String id, String label, {int last = 0, bool pinned = false}) =>
+HostProfile _host(String id, String label,
+        {int last = 0, bool pinned = false}) =>
     HostProfile({
       'id': id,
       'label': label,
@@ -23,7 +24,8 @@ void main() {
   ];
 
   test('name order keeps pinned hosts first', () {
-    expect(_labels(sortHosts(hosts, mode: 'name')), ['Bravo', 'alpha', 'Charlie']);
+    expect(
+        _labels(sortHosts(hosts, mode: 'name')), ['Bravo', 'alpha', 'Charlie']);
   });
 
   test('recent order puts the last connected first', () {
@@ -48,7 +50,8 @@ void main() {
     expect(settings.hostSortMode, 'manual');
     expect(settings.hostOrder, ['b', 'a']);
     expect(settings.toJson()['hostOrder'], ['b', 'a']);
-    expect(AppSettings.fromJson(const {'hostSortMode': 'x'}).hostSortMode, 'name');
+    expect(
+        AppSettings.fromJson(const {'hostSortMode': 'x'}).hostSortMode, 'name');
     expect(const AppSettings().hostOrder, isEmpty);
   });
 }
