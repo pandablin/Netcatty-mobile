@@ -77,12 +77,10 @@ class _TerminalSpecialKeysState extends ConsumerState<TerminalSpecialKeys> {
       for (final key in widget.customKeys)
         key.id: _QuickKey(key.label, key.value),
     };
-    final normalized = [
-      ...widget.order.where(definitions.containsKey),
-      ...defaultTerminalQuickKeys.where(
-        (value) => !widget.order.contains(value),
-      ),
-    ];
+    // Keys removed in the editor stay removed; an empty or unusable order
+    // falls back to the defaults.
+    final stored = widget.order.where(definitions.containsKey).toList();
+    final normalized = stored.isEmpty ? defaultTerminalQuickKeys : stored;
     return AnimatedBuilder(
       animation: widget.inputController,
       builder: (context, _) => Material(
@@ -202,7 +200,9 @@ class _TerminalSpecialKeysState extends ConsumerState<TerminalSpecialKeys> {
     List<String> order,
     Map<String, _QuickKey> definitions,
   ) {
-    const columnCount = 6;
+    // Thirteen or fourteen keys (e.g. the defaults plus Ctrl+C) still fit in
+    // two rows instead of leaving one key alone on a third row.
+    final columnCount = order.length > 12 && order.length <= 14 ? 7 : 6;
     const rowHeight = 38.0;
     final rowCount = (order.length / columnCount).ceil();
     return Column(
@@ -401,6 +401,41 @@ class _TerminalSpecialKeysState extends ConsumerState<TerminalSpecialKeys> {
                     ),
                   ),
                 ),
+                Builder(
+                  builder: (context) {
+                    final available = _quickKeys.keys
+                        .where((id) => !working.contains(id))
+                        .toList(growable: false);
+                    if (available.isEmpty) return const SizedBox.shrink();
+                    return Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 4, 16, 10),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          LText(
+                            '点击添加内置按键',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                          const SizedBox(height: 6),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 6,
+                            children: [
+                              for (final id in available)
+                                ActionChip(
+                                  key: ValueKey('quick-key-add-$id'),
+                                  avatar: const Icon(Icons.add, size: 16),
+                                  label: LText(_quickKeys[id]!.label),
+                                  onPressed: () =>
+                                      setModalState(() => working.add(id)),
+                                ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
                 const Divider(height: 1),
                 Expanded(
                   child: ReorderableListView.builder(
@@ -421,7 +456,16 @@ class _TerminalSpecialKeysState extends ConsumerState<TerminalSpecialKeys> {
                             ? const LText('内置按键')
                             : LText('发送：${custom[customIndex].value}'),
                         trailing: customIndex < 0
-                            ? null
+                            ? IconButton(
+                                key: ValueKey('quick-key-remove-$id'),
+                                tooltip: localized('移除'),
+                                onPressed: working.length <= 1
+                                    ? null
+                                    : () => setModalState(
+                                          () => working.remove(id),
+                                        ),
+                                icon: const Icon(Icons.remove_circle_outline),
+                              )
                             : Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [

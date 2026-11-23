@@ -1,4 +1,6 @@
 const englishTranslations = <String, String>{
+  '移除': 'Remove',
+  '点击添加内置按键': 'Tap to add a built-in key',
   '点击主机直接连接': 'Tap a host to connect',
   '长按主机查看详情、复制 IP；关闭后点击主机先显示详情':
       'Long press a host for details and to copy its IP. When off, tapping a host shows its details first',

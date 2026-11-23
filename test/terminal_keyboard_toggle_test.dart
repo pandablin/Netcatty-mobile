@@ -10,15 +10,17 @@ void _ignore() {}
 Widget _toolbar({
   required ValueNotifier<bool> keyboardOpen,
   required VoidCallback onShowKeyboard,
+  List<String> order = defaultTerminalQuickKeys,
+  void Function(String value)? onSend,
 }) =>
     ProviderScope(
       child: MaterialApp(
         home: Scaffold(
           body: TerminalSpecialKeys(
-            order: defaultTerminalQuickKeys,
+            order: order,
             customKeys: const [],
             inputController: TerminalInputController(),
-            onSend: (value, {bool enter = false}) {},
+            onSend: (value, {bool enter = false}) => onSend?.call(value),
             onAi: _ignore,
             onPortForward: null,
             onSystemManagement: null,
@@ -78,5 +80,41 @@ void main() {
         .tap(find.byKey(const ValueKey('terminal-action-hide-keyboard')));
     await tester.pump();
     expect(shows, 1, reason: 'an open keyboard is hidden, not shown again');
+  });
+
+  testWidgets('Ctrl+C added to the defaults stays on two rows and sends ^C',
+      (tester) async {
+    final sent = <String>[];
+    await tester.pumpWidget(
+      _toolbar(
+        keyboardOpen: ValueNotifier(true),
+        onShowKeyboard: _ignore,
+        order: const [...defaultTerminalQuickKeys, 'ctrlC'],
+        onSend: sent.add,
+      ),
+    );
+    await tester.pumpAndSettle();
+    final ctrlC = find.text('Ctrl+C');
+    expect(ctrlC, findsOneWidget);
+    expect(
+      tester.getCenter(ctrlC).dy,
+      closeTo(tester.getCenter(find.text('Shift')).dy, 1),
+    );
+    await tester.tap(ctrlC);
+    await tester.pump();
+    expect(sent, ['\x03']);
+  });
+
+  testWidgets('removed default keys stay removed', (tester) async {
+    await tester.pumpWidget(
+      _toolbar(
+        keyboardOpen: ValueNotifier(true),
+        onShowKeyboard: _ignore,
+        order: const ['escape', 'tab', 'ctrlC'],
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Ctrl+C'), findsOneWidget);
+    expect(find.text('Home'), findsNothing);
   });
 }

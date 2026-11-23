@@ -51,10 +51,15 @@ struct NetcattyLiveActivityWidget: Widget {
         }
         DynamicIslandExpandedRegion(.trailing) {
           VStack(alignment: .trailing, spacing: 3) {
-            Text(countLabel(state))
-              .font(.caption)
-              .foregroundStyle(.secondary)
-              .lineLimit(1)
+            // A symbol + number never truncates the way "2 个连接" did in the
+            // narrow trailing region.
+            HStack(spacing: 3) {
+              Image(systemName: "rectangle.stack.fill")
+              Text("\(state.count)")
+            }
+            .font(.caption.weight(.medium))
+            .foregroundStyle(.secondary)
+            .fixedSize()
             Text(state.connectedSince, style: .timer)
               .font(.callout.monospacedDigit().weight(.medium))
               .multilineTextAlignment(.trailing)
@@ -91,17 +96,20 @@ struct NetcattyLiveActivityWidget: Widget {
           .padding(.bottom, 4)
         }
       } compactLeading: {
-        DistroGlyph(distro: state.activeDistro)
-          .foregroundStyle(tint)
-          .frame(width: 20, height: 20)
-          .overlay(alignment: .bottomTrailing) {
-            Circle()
-              .fill(tint)
-              .frame(width: 6, height: 6)
-              .overlay(Circle().stroke(Color.black, lineWidth: 1.5))
-              .offset(x: 2, y: 2)
-          }
-          .padding(.leading, 2)
+        // The dot sits inside the frame: the compact region clips anything
+        // drawn outside it, which cut the dot in half.
+        ZStack(alignment: .bottomTrailing) {
+          DistroGlyph(distro: state.activeDistro)
+            .foregroundStyle(tint)
+            .frame(width: 18, height: 18)
+            .frame(width: 24, height: 24, alignment: .topLeading)
+          Circle()
+            .fill(tint)
+            .frame(width: 8, height: 8)
+            .overlay(Circle().stroke(Color.black, lineWidth: 2))
+        }
+        .frame(width: 24, height: 24)
+        .padding(.leading, 2)
       } compactTrailing: {
         HStack(spacing: 3) {
           Text(state.activeName)
