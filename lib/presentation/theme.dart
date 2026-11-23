@@ -257,7 +257,8 @@ class NetcattyTheme {
       ),
       // Floating so it sits above the tab bar instead of under it.
       snackBarTheme: SnackBarThemeData(
-        backgroundColor: dark ? const Color(0xff333331) : const Color(0xff242423),
+        backgroundColor:
+            dark ? const Color(0xff333331) : const Color(0xff242423),
         contentTextStyle: const TextStyle(
           fontFamily: uiFont,
           color: Colors.white,
