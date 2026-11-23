@@ -82,8 +82,7 @@ void main() {
     expect(shows, 1, reason: 'an open keyboard is hidden, not shown again');
   });
 
-  testWidgets('a 13th key keeps two rows; Ctrl+C sends ^C',
-      (tester) async {
+  testWidgets('a 13th key keeps two rows; Ctrl+C sends ^C', (tester) async {
     final sent = <String>[];
     await tester.pumpWidget(
       _toolbar(
