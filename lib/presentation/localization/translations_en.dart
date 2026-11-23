@@ -1,4 +1,13 @@
 const englishTranslations = <String, String>{
+  '按名称排序': 'Sort by name',
+  '按最近连接排序': 'Sort by last connected',
+  '自定义顺序': 'Custom order',
+  '调整顺序…': 'Reorder…',
+  '调整服务器顺序': 'Reorder servers',
+  '按住右侧手柄拖动；保存后改为自定义顺序':
+      'Drag the handle on the right. Saving switches to custom order',
+  '按名称重排': 'Reset to name order',
+  '保存顺序': 'Save order',
   '移除': 'Remove',
   '点击添加内置按键': 'Tap to add a built-in key',
   '点击主机直接连接': 'Tap a host to connect',

@@ -55,6 +55,8 @@ class AppSettings {
     this.themeMode = 'dark',
     this.uiThemeId = 'tokyo-night',
     this.serverViewMode = 'grid',
+    this.hostSortMode = 'name',
+    this.hostOrder = const [],
     this.terminalFontSize = 14,
     this.terminalSecureKeyboard = false,
     this.terminalTapToKeyboard = true,
@@ -117,6 +119,13 @@ class AppSettings {
       themeMode: json['themeMode']?.toString() ?? 'dark',
       uiThemeId: json['uiThemeId']?.toString() ?? 'tokyo-night',
       serverViewMode: _serverViewMode(json['serverViewMode']?.toString()),
+      hostSortMode: const {'name', 'recent', 'manual'}
+              .contains(json['hostSortMode']?.toString())
+          ? json['hostSortMode'].toString()
+          : 'name',
+      hostOrder: List<String>.unmodifiable(
+        (json['hostOrder'] as List? ?? const []).map((id) => id.toString()),
+      ),
       terminalFontSize: ((json['terminalFontSize'] as num?)?.toDouble() ?? 14)
           .clamp(minTerminalFontSize, maxTerminalFontSize)
           .toDouble(),
@@ -157,6 +166,13 @@ class AppSettings {
   final String themeMode;
   final String uiThemeId;
   final String serverViewMode;
+
+  /// Host list order: 'name', 'recent' (last connected first) or 'manual'.
+  final String hostSortMode;
+
+  /// Host ids in the user's manual order (used when [hostSortMode] is
+  /// 'manual'; hosts missing from it follow, sorted by name).
+  final List<String> hostOrder;
   final double terminalFontSize;
   final bool terminalSecureKeyboard;
 
@@ -198,6 +214,8 @@ class AppSettings {
     String? themeMode,
     String? uiThemeId,
     String? serverViewMode,
+    String? hostSortMode,
+    List<String>? hostOrder,
     double? terminalFontSize,
     bool? terminalSecureKeyboard,
     bool? terminalTapToKeyboard,
@@ -225,6 +243,8 @@ class AppSettings {
         themeMode: themeMode ?? this.themeMode,
         uiThemeId: uiThemeId ?? this.uiThemeId,
         serverViewMode: serverViewMode ?? this.serverViewMode,
+        hostSortMode: hostSortMode ?? this.hostSortMode,
+        hostOrder: hostOrder ?? this.hostOrder,
         terminalFontSize: terminalFontSize ?? this.terminalFontSize,
         terminalSecureKeyboard:
             terminalSecureKeyboard ?? this.terminalSecureKeyboard,
@@ -262,6 +282,8 @@ class AppSettings {
         'themeMode': themeMode,
         'uiThemeId': uiThemeId,
         'serverViewMode': serverViewMode,
+        'hostSortMode': hostSortMode,
+        'hostOrder': hostOrder,
         'terminalFontSize': terminalFontSize,
         'terminalSecureKeyboard': terminalSecureKeyboard,
         'terminalTapToKeyboard': terminalTapToKeyboard,

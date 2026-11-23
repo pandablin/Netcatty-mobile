@@ -8,6 +8,7 @@ import '../../application/settings_controller.dart';
 import '../../application/vault_controller.dart';
 import '../../domain/models/host.dart';
 import '../../application/home_navigation.dart';
+import '../../application/host_sorting.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/host_editor.dart';
 import '../widgets/host_system_icon.dart';
@@ -49,7 +50,7 @@ class _VaultScreenState extends ConsumerState<VaultScreen> {
         }
       });
     }
-    final hosts = (vault?.hosts ?? const <HostProfile>[]).where((host) {
+    final filtered = (vault?.hosts ?? const <HostProfile>[]).where((host) {
       final query = _search.text.toLowerCase();
       final matchesQuery = query.isEmpty ||
           host.label.toLowerCase().contains(query) ||
@@ -57,11 +58,12 @@ class _VaultScreenState extends ConsumerState<VaultScreen> {
           host.tags.any((tag) => tag.toLowerCase().contains(query));
       return matchesQuery &&
           (selectedGroup == null || host.group == selectedGroup);
-    }).toList()
-      ..sort((a, b) {
-        if (a.pinned != b.pinned) return a.pinned ? -1 : 1;
-        return a.label.toLowerCase().compareTo(b.label.toLowerCase());
-      });
+    });
+    final hosts = sortHosts(
+      filtered,
+      mode: settings.hostSortMode,
+      manualOrder: settings.hostOrder,
+    );
 
     return SafeArea(
       child: Column(
@@ -80,31 +82,65 @@ class _VaultScreenState extends ConsumerState<VaultScreen> {
                 ),
                 const Spacer(),
                 PopupMenuButton<String>(
+                  key: const ValueKey('vault-view-menu'),
                   tooltip: localized('服务器视图'),
-                  initialValue: viewMode,
-                  onSelected: (value) => ref
-                      .read(settingsControllerProvider.notifier)
-                      .update(settings.copyWith(serverViewMode: value)),
-                  itemBuilder: (_) => [
-                    for (final (label, mode, icon) in const [
-                      ('网格视图', 'grid', Icons.grid_view_outlined),
-                      ('列表视图', 'list', Icons.view_list_outlined),
-                      ('树形视图', 'tree', Icons.account_tree_outlined),
-                    ])
-                      PopupMenuItem(
-                        value: mode,
+                  onSelected: (value) {
+                    final notifier =
+                        ref.read(settingsControllerProvider.notifier);
+                    if (value == 'reorder') {
+                      _reorderHosts();
+                    } else if (value.startsWith('sort:')) {
+                      notifier.update(
+                        settings.copyWith(hostSortMode: value.substring(5)),
+                      );
+                    } else {
+                      notifier.update(settings.copyWith(serverViewMode: value));
+                    }
+                  },
+                  itemBuilder: (_) {
+                    final check = Icon(
+                      Icons.check,
+                      color: Theme.of(context).colorScheme.primary,
+                    );
+                    return [
+                      for (final (label, mode, icon) in const [
+                        ('网格视图', 'grid', Icons.grid_view_outlined),
+                        ('列表视图', 'list', Icons.view_list_outlined),
+                        ('树形视图', 'tree', Icons.account_tree_outlined),
+                      ])
+                        PopupMenuItem(
+                          value: mode,
+                          child: ListTile(
+                            leading: Icon(icon),
+                            title: LText(label),
+                            trailing: viewMode == mode ? check : null,
+                          ),
+                        ),
+                      const PopupMenuDivider(),
+                      for (final (label, mode, icon) in const [
+                        ('按名称排序', 'name', Icons.sort_by_alpha),
+                        ('按最近连接排序', 'recent', Icons.history),
+                        ('自定义顺序', 'manual', Icons.low_priority),
+                      ])
+                        PopupMenuItem(
+                          value: 'sort:$mode',
+                          child: ListTile(
+                            leading: Icon(icon),
+                            title: LText(label),
+                            trailing:
+                                settings.hostSortMode == mode ? check : null,
+                          ),
+                        ),
+                      const PopupMenuItem(
+                        key: ValueKey('vault-reorder'),
+                        value: 'reorder',
                         child: ListTile(
-                          leading: Icon(icon),
-                          title: LText(label),
-                          trailing: viewMode == mode
-                              ? Icon(
-                                  Icons.check,
-                                  color: Theme.of(context).colorScheme.primary,
-                                )
-                              : null,
+                          leading: Icon(Icons.swap_vert),
+                          title: LText('调整顺序…'),
                         ),
                       ),
-                  ],
+                    ];
+                  },
                   icon: Icon(switch (viewMode) {
                     'list' => Icons.view_list_outlined,
                     'tree' => Icons.account_tree_outlined,
@@ -179,13 +215,18 @@ class _VaultScreenState extends ConsumerState<VaultScreen> {
                             ref.read(vaultControllerProvider.notifier).load(),
                         child: switch (viewMode) {
                           'grid' => GridView.builder(
-                              padding: const EdgeInsets.all(12),
+                              padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
                               gridDelegate:
-                                  const SliverGridDelegateWithMaxCrossAxisExtent(
+                                  SliverGridDelegateWithMaxCrossAxisExtent(
                                 maxCrossAxisExtent: 230,
-                                mainAxisExtent: 136,
-                                crossAxisSpacing: 10,
-                                mainAxisSpacing: 10,
+                                mainAxisExtent: _HostCard.extent(
+                                  context,
+                                  withGroup: hosts.any(
+                                    (host) => host.group?.isNotEmpty == true,
+                                  ),
+                                ),
+                                crossAxisSpacing: 8,
+                                mainAxisSpacing: 8,
                               ),
                               itemCount: hosts.length,
                               itemBuilder: (_, index) => _HostCard(
@@ -206,10 +247,10 @@ class _VaultScreenState extends ConsumerState<VaultScreen> {
                               onEdit: _editHost,
                             ),
                           _ => ListView.separated(
-                              padding: const EdgeInsets.all(12),
+                              padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
                               itemCount: hosts.length,
                               separatorBuilder: (_, __) =>
-                                  const SizedBox(height: 8),
+                                  const SizedBox(height: 6),
                               itemBuilder: (_, index) => _HostTile(
                                 host: hosts[index],
                                 connected:
@@ -226,6 +267,92 @@ class _VaultScreenState extends ConsumerState<VaultScreen> {
         ],
       ),
     );
+  }
+
+  Future<void> _reorderHosts() async {
+    final vault = await ref.read(vaultControllerProvider.notifier).ready();
+    if (!mounted) return;
+    final settings = ref.read(settingsControllerProvider);
+    final working = sortHosts(
+      vault.hosts,
+      mode: settings.hostSortMode,
+      manualOrder: settings.hostOrder,
+    );
+    final order = await showModalBottomSheet<List<String>>(
+      context: context,
+      useSafeArea: true,
+      isScrollControlled: true,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setSheetState) => SizedBox(
+          height: MediaQuery.sizeOf(context).height * .85,
+          child: Column(
+            children: [
+              ListTile(
+                title: const LText('调整服务器顺序'),
+                subtitle: const LText('按住右侧手柄拖动；保存后改为自定义顺序'),
+                trailing: TextButton(
+                  onPressed: () => setSheetState(
+                    () => working.sort(
+                      (a, b) =>
+                          a.label.toLowerCase().compareTo(b.label.toLowerCase()),
+                    ),
+                  ),
+                  child: const LText('按名称重排'),
+                ),
+              ),
+              const Divider(height: 1),
+              Expanded(
+                child: ReorderableListView.builder(
+                  buildDefaultDragHandles: false,
+                  itemCount: working.length,
+                  onReorderItem: (oldIndex, newIndex) => setSheetState(() {
+                    final host = working.removeAt(oldIndex);
+                    working.insert(newIndex, host);
+                  }),
+                  itemBuilder: (context, index) {
+                    final host = working[index];
+                    return ListTile(
+                      key: ValueKey('reorder-${host.id}'),
+                      dense: true,
+                      visualDensity: VisualDensity.compact,
+                      leading: HostSystemIcon(host: host, size: 30),
+                      title: LText(host.label),
+                      subtitle: LText(host.hostname),
+                      trailing: ReorderableDragStartListener(
+                        index: index,
+                        child: const Padding(
+                          padding: EdgeInsets.all(8),
+                          child: Icon(Icons.drag_handle),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: FilledButton(
+                    key: const ValueKey('reorder-save'),
+                    onPressed: () => Navigator.pop(
+                      context,
+                      [for (final host in working) host.id],
+                    ),
+                    child: const LText('保存顺序'),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (order == null || !mounted) return;
+    final latest = ref.read(settingsControllerProvider);
+    await ref.read(settingsControllerProvider.notifier).update(
+          latest.copyWith(hostSortMode: 'manual', hostOrder: order),
+        );
   }
 
   DateTime? _lastDirectConnect;
@@ -798,12 +925,14 @@ class _HostTree extends StatelessWidget {
             children: [
               for (final host in children)
                 ListTile(
-                  contentPadding: const EdgeInsets.only(left: 28, right: 8),
+                  dense: true,
+                  visualDensity: const VisualDensity(vertical: -2),
+                  contentPadding: const EdgeInsets.only(left: 20, right: 4),
                   onTap: () => onTap(host),
                   onLongPress: () => onLongPress(host),
                   leading: _HostIcon(
                     host: host,
-                    size: 38,
+                    size: 34,
                     connected: connectedHostIds.contains(host.id),
                   ),
                   title: LText(host.label),
@@ -882,25 +1011,39 @@ class _HostCard extends StatelessWidget {
   final VoidCallback onLongPress;
   final VoidCallback onEdit;
 
+  /// Card height: icon row + name + address (+ group), scaled with the
+  /// system text size so large accessibility fonts do not overflow.
+  static double extent(BuildContext context, {required bool withGroup}) {
+    final textScale = MediaQuery.textScalerOf(context).scale(14) / 14;
+    return 58 + (withGroup ? 54 : 38) * textScale;
+  }
+
   @override
   Widget build(BuildContext context) => Card(
+        margin: EdgeInsets.zero,
         clipBehavior: Clip.antiAlias,
         child: InkWell(
           onTap: onTap,
           onLongPress: onLongPress,
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(14, 12, 6, 12),
+            padding: const EdgeInsets.fromLTRB(12, 10, 4, 10),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
                   children: [
-                    _HostIcon(host: host, size: 40, connected: connected),
+                    _HostIcon(host: host, size: 32, connected: connected),
                     const Spacer(),
-                    if (host.pinned) const Icon(Icons.push_pin, size: 16),
+                    if (host.pinned) const Icon(Icons.push_pin, size: 14),
                     IconButton(
                       onPressed: onEdit,
-                      visualDensity: VisualDensity.compact,
+                      padding: EdgeInsets.zero,
+                      constraints:
+                          const BoxConstraints.tightFor(width: 32, height: 32),
+                      style: IconButton.styleFrom(
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                      iconSize: 20,
                       icon: const Icon(Icons.more_horiz),
                     ),
                   ],
@@ -911,9 +1054,9 @@ class _HostCard extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
-                      fontWeight: FontWeight.w600, fontSize: 16),
+                      fontWeight: FontWeight.w600, fontSize: 15),
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 2),
                 LText(
                   '${host.username}@${host.hostname}:${host.port}',
                   maxLines: 1,
@@ -923,6 +1066,8 @@ class _HostCard extends StatelessWidget {
                 if (host.group?.isNotEmpty == true)
                   LText(
                     host.group!,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       color: Theme.of(context).colorScheme.primary,
                       fontSize: 11,
@@ -950,11 +1095,18 @@ class _HostTile extends StatelessWidget {
   final VoidCallback onEdit;
   @override
   Widget build(BuildContext context) => Card(
+        margin: EdgeInsets.zero,
         child: ListTile(
+          dense: true,
+          visualDensity: const VisualDensity(vertical: -2),
+          contentPadding: const EdgeInsets.only(left: 12, right: 4),
           onTap: onTap,
           onLongPress: onLongPress,
-          leading: _HostIcon(host: host, size: 42, connected: connected),
-          title: LText(host.label),
+          leading: _HostIcon(host: host, size: 36, connected: connected),
+          title: LText(
+            host.label,
+            style: Theme.of(context).textTheme.titleSmall,
+          ),
           subtitle: LText('${host.username}@${host.hostname}:${host.port}'),
           trailing: IconButton(
             onPressed: onEdit,
