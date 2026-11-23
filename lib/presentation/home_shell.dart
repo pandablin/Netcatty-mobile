@@ -75,7 +75,15 @@ class HomeShell extends ConsumerWidget {
                           ),
                     )
                   : Theme.of(context),
-              child: IndexedStack(index: index, children: _pages),
+              // Hidden tabs stay alive but their animations pause (cursor
+              // blink, spinners, progress), so they stop using frames.
+              child: IndexedStack(
+                index: index,
+                children: [
+                  for (var page = 0; page < _pages.length; page++)
+                    TickerMode(enabled: page == index, child: _pages[page]),
+                ],
+              ),
             ),
           ],
         ),

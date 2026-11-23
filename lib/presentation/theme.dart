@@ -110,6 +110,17 @@ class NetcattyTheme {
       useMaterial3: true,
       fontFamily: uiFont,
       colorScheme: scheme,
+      // iOS-style press feedback: a quiet tint, no Material ripple. Ripples
+      // also cost an animation per tap.
+      splashFactory: NoSplash.splashFactory,
+      splashColor: Colors.transparent,
+      highlightColor: preset.foreground.withValues(alpha: dark ? 0.08 : 0.05),
+      pageTransitionsTheme: const PageTransitionsTheme(
+        builders: {
+          TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+          TargetPlatform.android: CupertinoPageTransitionsBuilder(),
+        },
+      ),
     );
     final text = base.textTheme.apply(
       bodyColor: preset.foreground,

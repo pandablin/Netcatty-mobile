@@ -1060,10 +1060,12 @@ class _HostCard extends StatelessWidget {
   }
 
   @override
+  // The press highlight follows the card's rounded corners via the ink
+  // shape, so the card itself needs no clip layer.
   Widget build(BuildContext context) => Card(
         margin: EdgeInsets.zero,
-        clipBehavior: Clip.antiAlias,
         child: InkWell(
+          borderRadius: BorderRadius.circular(22),
           onTap: onTap,
           onLongPress: onLongPress,
           child: Padding(
@@ -1138,6 +1140,11 @@ class _HostTile extends StatelessWidget {
   Widget build(BuildContext context) => Card(
         margin: EdgeInsets.zero,
         child: ListTile(
+          // Without a shape the press highlight was a square band that stuck
+          // out past the card's rounded corners.
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(22),
+          ),
           dense: true,
           visualDensity: const VisualDensity(vertical: -2),
           contentPadding: const EdgeInsets.only(left: 12, right: 4),
