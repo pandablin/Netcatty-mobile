@@ -7,12 +7,12 @@ import 'package:flutter/services.dart';
 class GlassStyle {
   const GlassStyle._(this.tint, this.rim, this.highlight, this.shadow);
 
-  factory GlassStyle.of(BuildContext context, {double strength = 1}) {
+  factory GlassStyle.of(BuildContext context, {double opacity = 0.7}) {
     final theme = Theme.of(context);
     final dark = theme.brightness == Brightness.dark;
     final surface = theme.colorScheme.surface;
     return GlassStyle._(
-      surface.withValues(alpha: (dark ? 0.62 : 0.68) * strength),
+      surface.withValues(alpha: opacity),
       Colors.white.withValues(alpha: dark ? 0.14 : 0.75),
       Colors.white.withValues(alpha: dark ? 0.06 : 0.35),
       Colors.black.withValues(alpha: dark ? 0.38 : 0.10),
@@ -27,14 +27,16 @@ class GlassStyle {
 
 /// A translucent, blurred panel with a light rim and a soft drop shadow.
 ///
-/// [blur] is the expensive part (a backdrop filter); leave it off for small
-/// controls that sit on a plain background, where it would look the same.
+/// [blur] is the expensive part: a backdrop filter re-blurs whatever is
+/// behind it on every frame while content scrolls. It is off by default;
+/// a nearly opaque tint looks almost the same and costs nothing.
 class GlassSurface extends StatelessWidget {
   const GlassSurface({
     super.key,
     required this.child,
     this.borderRadius = const BorderRadius.all(Radius.circular(24)),
-    this.blur = true,
+    this.blur = false,
+    this.opacity,
     this.padding = EdgeInsets.zero,
     this.shadow = true,
   });
@@ -42,12 +44,15 @@ class GlassSurface extends StatelessWidget {
   final Widget child;
   final BorderRadius borderRadius;
   final bool blur;
+
+  /// Tint opacity; defaults to 0.7 with blur and 0.9 without.
+  final double? opacity;
   final EdgeInsetsGeometry padding;
   final bool shadow;
 
   @override
   Widget build(BuildContext context) {
-    final style = GlassStyle.of(context, strength: blur ? 1 : 1.25);
+    final style = GlassStyle.of(context, opacity: opacity ?? (blur ? 0.7 : 0.9));
     Widget body = DecoratedBox(
       decoration: BoxDecoration(
         borderRadius: borderRadius,
@@ -81,8 +86,8 @@ class GlassSurface extends StatelessWidget {
             ? [
                 BoxShadow(
                   color: style.shadow,
-                  blurRadius: 28,
-                  offset: const Offset(0, 10),
+                  blurRadius: 18,
+                  offset: const Offset(0, 6),
                 ),
               ]
             : null,
@@ -119,7 +124,6 @@ class GlassIconButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final button = PressScale(
       child: GlassSurface(
-        blur: false,
         borderRadius: BorderRadius.circular(size / 2),
         child: SizedBox.square(
           dimension: size,
@@ -214,7 +218,10 @@ class GlassTabBar extends StatelessWidget {
     final dark = Theme.of(context).brightness == Brightness.dark;
     return Padding(
       padding: EdgeInsets.fromLTRB(14, 0, 14, bottomGap(context)),
+      // No backdrop blur: the bar sits over scrolling lists, where a blur
+      // would be recomputed every frame. A 95% tint reads the same.
       child: GlassSurface(
+        opacity: 0.95,
         borderRadius: BorderRadius.circular(barHeight / 2),
         child: SizedBox(
           height: barHeight,

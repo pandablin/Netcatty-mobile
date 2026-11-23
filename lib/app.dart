@@ -77,7 +77,17 @@ class _NetcattyAppState extends ConsumerState<NetcattyApp>
       ),
       (previous, next) => ConnectionPlatformService.setActive(next),
     );
-    final settings = ref.watch(settingsControllerProvider);
+    // Only these fields affect MaterialApp; watching all settings rebuilt it
+    // (and both themes) for every toggle.
+    final settings = ref.watch(
+      settingsControllerProvider.select(
+        (value) => (
+          themeMode: value.themeMode,
+          uiThemeId: value.uiThemeId,
+          language: value.language,
+        ),
+      ),
+    );
     NetcattyLocalizations.use(settings.language);
     final mode = switch (settings.themeMode) {
       'light' => ThemeMode.light,
@@ -90,6 +100,9 @@ class _NetcattyAppState extends ConsumerState<NetcattyApp>
       theme: NetcattyTheme.build(Brightness.light, settings.uiThemeId),
       darkTheme: NetcattyTheme.build(Brightness.dark, settings.uiThemeId),
       themeMode: mode,
+      // Switch themes instantly: the default 200 ms cross-fade rebuilt every
+      // page (terminals included) on each animation frame.
+      themeAnimationDuration: Duration.zero,
       locale: settings.language == 'en'
           ? const Locale('en')
           : const Locale('zh', 'CN'),

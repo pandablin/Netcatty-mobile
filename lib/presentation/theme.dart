@@ -47,7 +47,14 @@ class NetcattyTheme {
     );
   }
 
-  static ThemeData build(Brightness brightness, String id) {
+  static final _cache = <(Brightness, String), ThemeData>{};
+
+  /// Themes are cached: building one runs ColorScheme.fromSeed (a tonal
+  /// palette computation) and used to happen twice on every settings change.
+  static ThemeData build(Brightness brightness, String id) =>
+      _cache.putIfAbsent((brightness, id), () => _build(brightness, id));
+
+  static ThemeData _build(Brightness brightness, String id) {
     final preset = resolve(brightness, id);
     final dark = brightness == Brightness.dark;
     final seed = ColorScheme.fromSeed(

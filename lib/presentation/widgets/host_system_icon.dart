@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../domain/models/host.dart';
 import '../../domain/models/server_stats.dart';
@@ -38,18 +37,22 @@ class HostSystemIcon extends StatelessWidget {
           ),
           borderRadius: BorderRadius.circular(size * 0.27),
         ),
-        child: SvgPicture.asset(
-          'assets/distro/$distro.svg',
+        // Pre-rendered PNGs (from assets/distro/*.svg): an SVG with a colour
+        // filter was re-drawn through an offscreen layer for every visible
+        // row on every scroll frame. A decoded image is drawn once per frame
+        // and the dark-mode tint is a plain paint filter.
+        child: Image.asset(
+          'assets/distro_png/$distro.png',
           fit: BoxFit.contain,
-          // Most logos are plain black paths and vanish on a dark surface;
+          filterQuality: FilterQuality.medium,
+          gaplessPlayback: true,
+          // Most logos are plain black shapes and vanish on a dark surface;
           // render them as one light monochrome tone in dark mode.
-          colorFilter: Theme.of(context).brightness == Brightness.dark
-              ? ColorFilter.mode(
-                  scheme.onSurface.withValues(alpha: 0.88),
-                  BlendMode.srcIn,
-                )
+          color: Theme.of(context).brightness == Brightness.dark
+              ? scheme.onSurface.withValues(alpha: 0.88)
               : null,
-          placeholderBuilder: (_) => Icon(
+          colorBlendMode: BlendMode.srcIn,
+          errorBuilder: (_, __, ___) => Icon(
             Icons.dns_outlined,
             size: size * 0.55,
             color: color,

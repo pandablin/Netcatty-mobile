@@ -1055,8 +1055,7 @@ class _HostCard extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) => PressScale(
-        child: Card(
+  Widget build(BuildContext context) => Card(
           margin: EdgeInsets.zero,
           clipBehavior: Clip.antiAlias,
           child: InkWell(
@@ -1114,7 +1113,6 @@ class _HostCard extends StatelessWidget {
               ),
             ),
           ),
-        ),
       );
 }
 
@@ -1132,9 +1130,7 @@ class _HostTile extends StatelessWidget {
   final VoidCallback onLongPress;
   final VoidCallback onEdit;
   @override
-  Widget build(BuildContext context) => PressScale(
-        scale: 0.98,
-        child: Card(
+  Widget build(BuildContext context) => Card(
           margin: EdgeInsets.zero,
           child: ListTile(
             dense: true,
@@ -1153,7 +1149,6 @@ class _HostTile extends StatelessWidget {
               icon: const Icon(Icons.more_vert),
             ),
           ),
-        ),
       );
 }
 
