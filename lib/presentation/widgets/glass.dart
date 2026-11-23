@@ -52,7 +52,8 @@ class GlassSurface extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final style = GlassStyle.of(context, opacity: opacity ?? (blur ? 0.7 : 0.9));
+    final style =
+        GlassStyle.of(context, opacity: opacity ?? (blur ? 0.7 : 0.9));
     Widget body = DecoratedBox(
       decoration: BoxDecoration(
         borderRadius: borderRadius,
