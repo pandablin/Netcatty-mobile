@@ -1,8 +1,16 @@
 # Netcatty Mobile
 
-> 这是 [kmh1145/Netcatty-mobile](https://github.com/kmh1145/Netcatty-mobile) 的 Fork，主要面向 iOS 使用，修复了上游 issue 中的若干问题并做了性能与界面优化。安装包见本仓库 [Releases](https://github.com/wxte/Netcatty-mobile/releases/latest)，每个版本的改动见 [docs/releases](docs/releases)。
+> 这是 pandablin 的安卓定制分支，基于 [wxte/Netcatty-mobile](https://github.com/wxte/Netcatty-mobile)（其上游为 [kmh1145/Netcatty-mobile](https://github.com/kmh1145/Netcatty-mobile)）。持续同步上游功能，并保留本分支的命令分组、自有 GitHub OAuth、同步兼容性和安全修复。安装包见本仓库 [Releases](https://github.com/pandablin/Netcatty-mobile/releases)，每个版本的改动见 [docs/releases](docs/releases)。
 
-### 本 Fork 的主要改动
+### 本分支保留的定制
+
+- 手机端按桌面命令分组折叠显示，保留分组、命令和编辑元数据。
+- 构建时配置自有 GitHub OAuth 应用，CI 使用仓库公开变量，不内置第三方默认 Client ID。
+- 保留桌面端同步字段和删除信息、空目录检查、响应大小限制、加密参数及 SFTP 文件名校验。
+- 保留终端手动复制粘贴，同时限制远程终端默认读取系统剪贴板。
+- 安卓测试包名称为 **Netcatty**，沿用此前测试包的安装身份和签名；[1.10.0 更新说明](docs/releases/v1.10.0.md)列出本轮合入内容。
+
+### 保留的上游优化
 
 - **连接**：修复连接瞬间失败时 Android 闪退（上游 #38 #40）；IPv6 地址与 HTTP / SOCKS5 代理握手修正。
 - **私钥**：加密私钥未保存口令时弹窗输入，可保存到钥匙串；解密在后台进行（上游 #41）。
@@ -15,9 +23,9 @@ Netcatty 的 Android / iOS 移动端实现：一个面向服务器管理、SSH �
 
 项目延续桌面版 Netcatty 的深色工作台设计、Vault 数据模型和 `netcatty-vault.json` 加密同步格式，并针对触屏、多任务、移动文件系统和系统安全存储重新实现交互。
 
-[![Mobile CI](https://github.com/wxte/Netcatty-mobile/actions/workflows/mobile.yml/badge.svg)](https://github.com/wxte/Netcatty-mobile/actions/workflows/mobile.yml)
-[![Latest Release](https://img.shields.io/github/v/release/wxte/Netcatty-mobile)](https://github.com/wxte/Netcatty-mobile/releases/latest)
-[![License](https://img.shields.io/github/license/wxte/Netcatty-mobile)](LICENSE)
+[![Mobile CI](https://github.com/pandablin/Netcatty-mobile/actions/workflows/mobile.yml/badge.svg)](https://github.com/pandablin/Netcatty-mobile/actions/workflows/mobile.yml)
+[Releases](https://github.com/pandablin/Netcatty-mobile/releases)
+[![License](https://img.shields.io/github/license/pandablin/Netcatty-mobile)](LICENSE)
 
 ## 软件特色
 
@@ -30,7 +38,7 @@ Netcatty 的 Android / iOS 移动端实现：一个面向服务器管理、SSH �
 - **完整中英文界面**：可在设置中切换中文或英文，界面文案覆盖由自动化测试持续检查。
 - **安全优先**：密码、私钥、同步主密码和 API Key 分别保存到 Android Keystore / iOS Keychain；云端保险库采用 PBKDF2-SHA256 与 AES-256-GCM 加密。
 - **高度可定制**：网格、列表、树形三种主机视图，浅色/深色主题库，命令片段、可排序的终端快捷键，以及支持全局/仅终端范围、不透明度和九宫格对齐的自定义背景图片。
-- **内置更新检查**：设置页自动比较当前应用版本与 GitHub 最新正式 Release，发现新版本后可直接前往下载页面。
+- **内置更新检查**：设置页跟踪 wxte 上游最新正式 Release；本安卓定制包从本仓库 [Releases](https://github.com/pandablin/Netcatty-mobile/releases) 下载。
 
 ## 特色功能预览
 

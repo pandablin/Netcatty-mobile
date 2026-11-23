@@ -3,6 +3,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'application/auto_sync_controller.dart';
+import 'application/home_navigation.dart';
 import 'application/live_activity_controller.dart';
 import 'application/settings_controller.dart';
 import 'application/session_controller.dart';
@@ -41,6 +42,25 @@ class _NetcattyAppState extends ConsumerState<NetcattyApp>
     _autoSyncSubscription.close();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
+  }
+
+  /// Tapping the Dynamic Island / Lock Screen activity opens
+  /// `netcatty:///session/<id>`: show that terminal. This observer is
+  /// registered before MaterialApp's, and the app has no named routes, so
+  /// every incoming link (also ssh:// ones) is consumed here and never
+  /// reaches the Navigator.
+  @override
+  Future<bool> didPushRouteInformation(
+      RouteInformation routeInformation) async {
+    final id = sessionIdFromDeepLink(routeInformation.uri);
+    if (id == null) return true;
+    final sessions = ref.read(sessionControllerProvider);
+    final index = sessions.sessions.indexWhere((session) => session.id == id);
+    if (index >= 0) {
+      ref.read(sessionControllerProvider.notifier).activate(index);
+    }
+    ref.read(homeTabProvider.notifier).state = 1;
+    return true;
   }
 
   @override
@@ -113,6 +133,11 @@ class _NetcattyAppState extends ConsumerState<NetcattyApp>
         GlobalCupertinoLocalizations.delegate,
       ],
       home: const HomeShell(),
+      // A cold start from a link sets the engine's initial route to the
+      // link path; always start on the home shell instead.
+      onGenerateInitialRoutes: (_) => [
+        MaterialPageRoute<void>(builder: (_) => const HomeShell()),
+      ],
     );
   }
 }

@@ -64,14 +64,28 @@ class _TerminalScreenState extends ConsumerState<TerminalScreen> {
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(sessionControllerProvider);
-    final settings = ref.watch(settingsControllerProvider);
+    // Only the fields this page uses: changing the host sort order or the
+    // Dynamic Island switch no longer rebuilds the terminals.
+    final settings = ref.watch(
+      settingsControllerProvider.select(
+        (value) => (
+          terminalFontSize: value.terminalFontSize,
+          terminalSecureKeyboard: value.terminalSecureKeyboard,
+          terminalTapToKeyboard: value.terminalTapToKeyboard,
+          terminalImeSuggestions: value.terminalImeSuggestions,
+          terminalQuickKeys: value.terminalQuickKeys,
+          terminalCustomKeys: value.terminalCustomKeys,
+          customBackground: hasCustomBackground(value),
+        ),
+      ),
+    );
     final snippets =
         ref.watch(vaultControllerProvider).data?.snippets ?? const [];
     final selectedPending = state.selectedPending;
     final visibleSession = selectedPending == null ? state.active : null;
     final fullscreen = ref.watch(terminalFullscreenProvider);
     final pictureInPicture = ref.watch(terminalPictureInPictureProvider);
-    final customBackground = hasCustomBackground(settings);
+    final customBackground = settings.customBackground;
     if ((fullscreen || pictureInPicture) && visibleSession == null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;

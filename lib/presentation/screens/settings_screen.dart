@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/cupertino.dart' show CupertinoPage;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
@@ -10,6 +11,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../application/auto_sync_controller.dart';
+import '../../application/home_navigation.dart';
 import '../../application/settings_controller.dart';
 import '../../application/vault_controller.dart';
 import '../../domain/models/settings.dart';
@@ -39,6 +41,7 @@ class SettingsScreen extends ConsumerStatefulWidget {
 }
 
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
+  final _navigatorKey = GlobalKey<NavigatorState>();
   late final Future<PackageInfo> _packageInfo;
   late final UpdateCheckService _updateCheckService;
   final _backgroundImageService = BackgroundImageService();
@@ -74,6 +77,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   var _loaded = false;
   var _busy = false;
   var _checkingSyncVersions = false;
+  _SettingsSection? _section;
   String? _githubUser;
   CloudSyncVersions? _syncVersions;
   Object? _syncVersionsError;
@@ -161,691 +165,915 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   @override
-  Widget build(BuildContext context) => _buildSettings(
-        context,
-        ref.watch(autoSyncControllerProvider),
-      );
-
-  Widget _buildSettings(
-    BuildContext context,
-    AutoSyncState autoSyncState,
-  ) =>
-      SafeArea(
-        // The list scrolls under the floating glass tab bar.
-        bottom: false,
-        child: Scaffold(
-          appBar: AppBar(title: const LText('设置')),
-          body: ListView(
-            padding: EdgeInsets.fromLTRB(
-              16,
-              0,
-              16,
-              MediaQuery.paddingOf(context).bottom + 16,
+  Widget build(BuildContext context) {
+    final autoSyncState = ref.watch(autoSyncControllerProvider);
+    final isActiveTab = ref.watch(homeTabProvider) == 4;
+    // Sections open as pages of a nested navigator. The pages are rebuilt
+    // from this state, so changes show at once, and iOS swipe-back works.
+    return SafeArea(
+      // Lists scroll under the floating tab bar.
+      bottom: false,
+      child: NavigatorPopHandler<void>(
+        enabled: isActiveTab,
+        onPopWithResult: (_) {
+          // IndexedStack keeps inactive tabs mounted. The callback can also
+          // run when a different PopScope handles back, such as fullscreen.
+          final navigator = _navigatorKey.currentState;
+          if (isActiveTab && navigator != null && navigator.canPop()) {
+            navigator.pop();
+          }
+        },
+        child: Navigator(
+          key: _navigatorKey,
+          pages: [
+            CupertinoPage<void>(
+              key: const ValueKey('settings-index'),
+              child: _indexPage(context),
             ),
-            children: [
-              _header('外观与终端', '移动端偏好不会覆盖桌面端专属布局字段'),
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(14),
-                  child: Column(
-                    children: [
-                      SegmentedButton<String>(
-                        segments: const [
-                          ButtonSegment(
-                            value: 'dark',
-                            label: LText('深色'),
-                            icon: Icon(Icons.dark_mode_outlined),
-                          ),
-                          ButtonSegment(
-                            value: 'light',
-                            label: LText('浅色'),
-                            icon: Icon(Icons.light_mode_outlined),
-                          ),
-                          ButtonSegment(
-                            value: 'system',
-                            label: LText('系统'),
-                            icon: Icon(Icons.brightness_auto_outlined),
-                          ),
-                        ],
-                        selected: {themeMode},
-                        onSelectionChanged: (value) =>
-                            setState(() => themeMode = value.first),
-                      ),
-                      const SizedBox(height: 12),
-                      Builder(
-                        builder: (context) {
-                          final brightness = themeMode == 'light'
-                              ? Brightness.light
-                              : themeMode == 'dark'
-                                  ? Brightness.dark
-                                  : MediaQuery.platformBrightnessOf(context);
-                          final selected =
-                              NetcattyTheme.resolve(brightness, uiThemeId);
-                          return ListTile(
-                            contentPadding: EdgeInsets.zero,
-                            leading: CircleAvatar(
-                              backgroundColor: selected.background,
-                              child: Icon(
-                                Icons.palette_outlined,
-                                color: selected.primary,
-                              ),
-                            ),
-                            title: const LText('界面主题'),
-                            subtitle: LText(
-                              '${selected.name} · ${NetcattyTheme.presets(brightness).length} 种可选',
-                            ),
-                            trailing: const Icon(Icons.chevron_right),
-                            onTap: () => _selectTheme(brightness),
-                          );
-                        },
-                      ),
-                      SwitchListTile(
-                        key: const ValueKey('custom-background-switch'),
-                        contentPadding: EdgeInsets.zero,
-                        title: const LText('自定义背景'),
-                        subtitle: LText(
-                          customBackgroundPath.isEmpty
-                              ? '选择图片后可调整显示效果'
-                              : '背景图片已保存到 App 本地目录',
-                        ),
-                        value: customBackgroundEnabled,
-                        onChanged: (value) async {
-                          if (value && customBackgroundPath.isEmpty) {
-                            await _pickBackgroundImage();
-                            return;
-                          }
-                          if (mounted) {
-                            setState(() => customBackgroundEnabled = value);
-                          }
-                        },
-                      ),
-                      if (customBackgroundEnabled) ...[
-                        SegmentedButton<String>(
-                          key: const ValueKey('custom-background-scope'),
-                          expandedInsets: EdgeInsets.zero,
-                          segments: const [
-                            ButtonSegment(
-                              value: 'global',
-                              icon: Icon(Icons.layers_outlined),
-                              label: LText('全局背景'),
-                            ),
-                            ButtonSegment(
-                              value: 'terminal',
-                              icon: Icon(Icons.terminal_outlined),
-                              label: LText('仅终端'),
-                            ),
-                          ],
-                          selected: {customBackgroundScope},
-                          onSelectionChanged: (value) => setState(
-                            () => customBackgroundScope = value.first,
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        Align(
-                          alignment: Alignment.centerLeft,
-                          child: LText(
-                            customBackgroundScope == 'global'
-                                ? '背景应用到所有页面、顶部栏和底部导航栏'
-                                : '背景仅应用到终端页面',
-                            style: Theme.of(context).textTheme.bodySmall,
-                          ),
-                        ),
-                        const SizedBox(height: 10),
-                        _backgroundPreview(),
-                        const SizedBox(height: 8),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: OutlinedButton.icon(
-                                key: const ValueKey(
-                                  'custom-background-picker',
-                                ),
-                                onPressed: _pickBackgroundImage,
-                                icon: const Icon(Icons.image_outlined),
-                                label: LText(
-                                  customBackgroundPath.isEmpty
-                                      ? '选择背景图片'
-                                      : '更换背景图片',
-                                ),
-                              ),
-                            ),
-                            if (customBackgroundPath.isNotEmpty) ...[
-                              const SizedBox(width: 8),
-                              IconButton.outlined(
-                                key: const ValueKey(
-                                  'custom-background-remove',
-                                ),
-                                tooltip: localized('移除背景图片'),
-                                onPressed: _removeBackgroundImage,
-                                icon: const Icon(Icons.delete_outline),
-                              ),
-                            ],
-                          ],
-                        ),
-                        Row(
-                          children: [
-                            const LText('背景不透明度'),
-                            Expanded(
-                              child: Slider(
-                                key: const ValueKey(
-                                  'custom-background-opacity',
-                                ),
-                                value: customBackgroundOpacity,
-                                min: 0.05,
-                                max: 1,
-                                divisions: 19,
-                                label:
-                                    '${(customBackgroundOpacity * 100).round()}%',
-                                onChanged: (value) => setState(
-                                  () => customBackgroundOpacity = value,
-                                ),
-                              ),
-                            ),
-                            SizedBox(
-                              width: 42,
-                              child: LText(
-                                '${(customBackgroundOpacity * 100).round()}%',
-                                textAlign: TextAlign.end,
-                              ),
-                            ),
-                          ],
-                        ),
-                        DropdownButtonFormField<String>(
-                          key: ValueKey(
-                            'custom-background-alignment-$customBackgroundAlignment',
-                          ),
-                          initialValue: customBackgroundAlignment,
-                          decoration: LInputDecoration(labelText: '背景对齐方式'),
-                          items: [
-                            for (final value
-                                in supportedCustomBackgroundAlignments)
-                              DropdownMenuItem(
-                                value: value,
-                                child: LText(
-                                  _backgroundAlignmentLabel(value),
-                                ),
-                              ),
-                          ],
-                          onChanged: (value) {
-                            if (value != null) {
-                              setState(
-                                () => customBackgroundAlignment = value,
-                              );
-                            }
-                          },
-                        ),
-                        const SizedBox(height: 8),
-                      ],
-                      Row(
-                        children: [
-                          const LText('终端字号'),
-                          Expanded(
-                            child: Slider(
-                              value: terminalFontSize,
-                              min: minTerminalFontSize,
-                              max: maxTerminalFontSize,
-                              divisions: 18,
-                              label: terminalFontSize.toStringAsFixed(0),
-                              onChanged: (value) =>
-                                  setState(() => terminalFontSize = value),
-                            ),
-                          ),
-                          LText(terminalFontSize.toStringAsFixed(0)),
-                        ],
-                      ),
-                      SwitchListTile(
-                        contentPadding: EdgeInsets.zero,
-                        title: const LText('系统安全键盘'),
-                        subtitle: const LText(
-                          '使用系统密码键盘并关闭联想学习；终端快捷键仍可输入 Ctrl 组合键',
-                        ),
-                        value: terminalSecureKeyboard,
-                        onChanged: _savingTerminalSecureKeyboard
-                            ? null
-                            : _setTerminalSecureKeyboard,
-                      ),
-                      SwitchListTile(
-                        key: const ValueKey('terminal-ime-suggestions'),
-                        contentPadding: EdgeInsets.zero,
-                        title: const LText('显示输入法联想词'),
-                        subtitle: const LText(
-                          '打字时输入法候选栏保持稳定、可选择联想词。关闭后每个按键都会清空输入框，候选栏会闪烁、无法选词',
-                        ),
-                        value: ref
-                            .watch(settingsControllerProvider)
-                            .terminalImeSuggestions,
-                        onChanged: ref
-                                .watch(settingsControllerProvider)
-                                .terminalSecureKeyboard
-                            ? null
-                            : (value) => ref
-                                .read(settingsControllerProvider.notifier)
-                                .updateTerminalImeSuggestions(value),
-                      ),
-                      SwitchListTile(
-                        key: const ValueKey('host-tap-connects'),
-                        contentPadding: EdgeInsets.zero,
-                        title: const LText('点击主机直接连接'),
-                        subtitle: const LText(
-                          '长按主机查看详情、复制 IP；关闭后点击主机先显示详情',
-                        ),
-                        value: ref
-                            .watch(settingsControllerProvider)
-                            .hostTapConnects,
-                        onChanged: (value) => ref
-                            .read(settingsControllerProvider.notifier)
-                            .updateHostTapConnects(value),
-                      ),
-                      SwitchListTile(
-                        key: const ValueKey('terminal-tap-to-keyboard'),
-                        contentPadding: EdgeInsets.zero,
-                        title: const LText('点击终端弹出键盘'),
-                        subtitle: const LText(
-                          '关闭后只能用工具栏右下角的键盘按钮弹出键盘；向上翻看历史时点击终端始终不会弹出键盘',
-                        ),
-                        value: ref
-                            .watch(settingsControllerProvider)
-                            .terminalTapToKeyboard,
-                        onChanged: (value) => ref
-                            .read(settingsControllerProvider.notifier)
-                            .updateTerminalTapToKeyboard(value),
-                      ),
-                      if (Platform.isIOS) ...[
-                        SwitchListTile(
-                          key: const ValueKey('live-activity-enabled'),
-                          contentPadding: EdgeInsets.zero,
-                          title: const LText('灵动岛显示连接'),
-                          subtitle: const LText(
-                            '切到后台时在灵动岛和锁屏显示已连接的服务器、连接时长',
-                          ),
-                          value: ref
-                              .watch(settingsControllerProvider)
-                              .liveActivityEnabled,
-                          onChanged: (value) => ref
-                              .read(settingsControllerProvider.notifier)
-                              .updateLiveActivityEnabled(value),
-                        ),
-                        SwitchListTile(
-                          key: const ValueKey('live-activity-command'),
-                          contentPadding: EdgeInsets.zero,
-                          title: const LText('灵动岛显示最近命令'),
-                          subtitle: const LText(
-                            '展开灵动岛或在锁屏上显示最后执行的命令；命令里有密码等敏感内容时建议关闭',
-                          ),
-                          value: ref
-                              .watch(settingsControllerProvider)
-                              .liveActivityShowCommand,
-                          onChanged: ref
-                                  .watch(settingsControllerProvider)
-                                  .liveActivityEnabled
-                              ? (value) => ref
-                                  .read(settingsControllerProvider.notifier)
-                                  .updateLiveActivityShowCommand(value)
-                              : null,
-                        ),
-                      ],
-                      SwitchListTile(
-                        contentPadding: EdgeInsets.zero,
-                        title: const LText('SFTP 代码高亮'),
-                        subtitle: const LText('编辑文件时显示语法颜色'),
-                        value: sftpSyntaxHighlight,
-                        onChanged: (value) =>
-                            setState(() => sftpSyntaxHighlight = value),
-                      ),
-                      const SizedBox(height: 8),
-                      SegmentedButton<String>(
-                        segments: const [
-                          ButtonSegment(
-                            value: 'zh-CN',
-                            label: LText('中文'),
-                          ),
-                          ButtonSegment(
-                            value: 'en',
-                            label: LText('英文'),
-                          ),
-                        ],
-                        selected: {language},
-                        onSelectionChanged: (value) =>
-                            setState(() => language = value.first),
-                      ),
-                      SizedBox(
-                        width: double.infinity,
-                        child: OutlinedButton(
-                          onPressed: _saveAppearance,
-                          child: const LText('保存外观设置'),
-                        ),
-                      ),
-                    ],
-                  ),
+            if (_section != null)
+              CupertinoPage<void>(
+                key: ValueKey('settings-${_section!.name}'),
+                child: _sectionPage(context, _section!, autoSyncState),
+              ),
+          ],
+          onDidRemovePage: (page) {
+            if (page.key != const ValueKey('settings-index') && mounted) {
+              setState(() => _section = null);
+            }
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _indexPage(BuildContext context) {
+    final settings = ref.watch(settingsControllerProvider);
+    final scheme = Theme.of(context).colorScheme;
+    final themeName =
+        NetcattyTheme.resolve(Theme.of(context).brightness, uiThemeId).name;
+    return Scaffold(
+      appBar: AppBar(title: const LText('设置')),
+      body: ListView(
+        padding: EdgeInsets.fromLTRB(
+          16,
+          4,
+          16,
+          MediaQuery.paddingOf(context).bottom + 20,
+        ),
+        children: [
+          Card(
+            margin: EdgeInsets.zero,
+            child: ListTile(
+              minTileHeight: 76,
+              leading: Container(
+                width: 46,
+                height: 46,
+                decoration: BoxDecoration(
+                  color: scheme.primary.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(Icons.pets, color: scheme.primary),
+              ),
+              title: const Text(
+                'Netcatty Mobile',
+                style: TextStyle(
+                  fontFamily: NetcattyTheme.displayFont,
+                  fontSize: 19,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
-              _header('云同步', '兼容桌面端 netcatty-vault.json 加密格式'),
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(14),
-                  child: Column(
-                    children: [
-                      SegmentedButton<SyncProviderType>(
+              subtitle: FutureBuilder<PackageInfo>(
+                future: _packageInfo,
+                builder: (context, snapshot) => Text(
+                  snapshot.hasData
+                      ? 'v${snapshot.data!.version} · GPL-3.0-or-later'
+                      : 'GPL-3.0-or-later',
+                ),
+              ),
+            ),
+          ),
+          _groupLabel('通用'),
+          _group([
+            _navRow(
+              key: const ValueKey('settings-appearance'),
+              icon: Icons.palette_outlined,
+              title: '外观',
+              value: themeName,
+              section: _SettingsSection.appearance,
+            ),
+            _navRow(
+              key: const ValueKey('settings-terminal'),
+              icon: Icons.terminal,
+              title: '终端与连接',
+              value: '${terminalFontSize.round()} pt',
+              section: _SettingsSection.terminal,
+            ),
+            if (Platform.isIOS)
+              _navRow(
+                key: const ValueKey('settings-island'),
+                icon: Icons.view_agenda_outlined,
+                title: '灵动岛',
+                value: settings.liveActivityEnabled ? '开启' : '关闭',
+                section: _SettingsSection.island,
+              ),
+            _navRow(
+              key: const ValueKey('settings-language'),
+              icon: Icons.translate,
+              title: '语言',
+              value: _languageLabel(language),
+              section: _SettingsSection.language,
+            ),
+          ]),
+          _groupLabel('数据'),
+          _group([
+            _navRow(
+              key: const ValueKey('settings-sync'),
+              icon: Icons.cloud_outlined,
+              title: '云同步',
+              value: switch (provider) {
+                SyncProviderType.webdav => 'WebDAV',
+                SyncProviderType.githubGist => 'GitHub',
+                SyncProviderType.s3 => 'S3',
+              },
+              section: _SettingsSection.sync,
+            ),
+            _navRow(
+              icon: Icons.key_outlined,
+              title: 'SSH 密钥库',
+              onTap: () => showModalBottomSheet<void>(
+                context: context,
+                isScrollControlled: true,
+                useSafeArea: true,
+                builder: (_) => const KeychainSheet(),
+              ),
+            ),
+            _navRow(
+              icon: Icons.file_upload_outlined,
+              title: '导入 Netcatty JSON',
+              onTap: _import,
+            ),
+            _navRow(
+              icon: Icons.file_download_outlined,
+              title: '导出保险库 JSON',
+              subtitle: '导出包含凭据，请妥善保存',
+              onTap: _export,
+            ),
+          ]),
+          _groupLabel('Catty Agent'),
+          _group([
+            _navRow(
+              icon: Icons.auto_awesome_outlined,
+              title: '管理多个 AI 服务商',
+              onTap: _openAiProviders,
+            ),
+          ]),
+          _groupLabel('关于'),
+          _group([
+            _updateCheckTile(),
+            _navRow(
+              key: const ValueKey('settings-security'),
+              icon: Icons.shield_outlined,
+              title: '安全与隐私',
+              section: _SettingsSection.security,
+            ),
+          ]),
+        ],
+      ),
+    );
+  }
+
+  Widget _sectionPage(
+    BuildContext context,
+    _SettingsSection section,
+    AutoSyncState autoSyncState,
+  ) =>
+      switch (section) {
+        _SettingsSection.appearance => _page('外观', [
+            Card(
+              margin: EdgeInsets.zero,
+              child: Padding(
+                padding: const EdgeInsets.all(14),
+                child: Column(
+                  children: [
+                    SegmentedButton<String>(
+                      segments: const [
+                        ButtonSegment(
+                          value: 'dark',
+                          label: LText('深色'),
+                          icon: Icon(Icons.dark_mode_outlined),
+                        ),
+                        ButtonSegment(
+                          value: 'light',
+                          label: LText('浅色'),
+                          icon: Icon(Icons.light_mode_outlined),
+                        ),
+                        ButtonSegment(
+                          value: 'system',
+                          label: LText('系统'),
+                          icon: Icon(Icons.brightness_auto_outlined),
+                        ),
+                      ],
+                      selected: {themeMode},
+                      onSelectionChanged: (value) =>
+                          _setAppearance(() => themeMode = value.first),
+                    ),
+                    const SizedBox(height: 12),
+                    Builder(
+                      builder: (context) {
+                        final brightness = themeMode == 'light'
+                            ? Brightness.light
+                            : themeMode == 'dark'
+                                ? Brightness.dark
+                                : MediaQuery.platformBrightnessOf(context);
+                        final selected =
+                            NetcattyTheme.resolve(brightness, uiThemeId);
+                        return ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          leading: CircleAvatar(
+                            backgroundColor: selected.background,
+                            child: Icon(
+                              Icons.palette_outlined,
+                              color: selected.primary,
+                            ),
+                          ),
+                          title: const LText('界面主题'),
+                          subtitle: LText(
+                            '${selected.name} · ${NetcattyTheme.presets(brightness).length} 种可选',
+                          ),
+                          trailing: const Icon(Icons.chevron_right),
+                          onTap: () => _selectTheme(brightness),
+                        );
+                      },
+                    ),
+                    SwitchListTile(
+                      key: const ValueKey('custom-background-switch'),
+                      contentPadding: EdgeInsets.zero,
+                      title: const LText('自定义背景'),
+                      subtitle: LText(
+                        customBackgroundPath.isEmpty
+                            ? '选择图片后可调整显示效果'
+                            : '背景图片已保存到 App 本地目录',
+                      ),
+                      value: customBackgroundEnabled,
+                      onChanged: (value) async {
+                        if (value && customBackgroundPath.isEmpty) {
+                          await _pickBackgroundImage();
+                          return;
+                        }
+                        if (mounted) {
+                          _setAppearance(() => customBackgroundEnabled = value);
+                        }
+                      },
+                    ),
+                    if (customBackgroundEnabled) ...[
+                      SegmentedButton<String>(
+                        key: const ValueKey('custom-background-scope'),
                         expandedInsets: EdgeInsets.zero,
                         segments: const [
                           ButtonSegment(
-                            value: SyncProviderType.webdav,
-                            label: _AdaptiveSyncProviderLabel('WebDAV'),
-                            icon: Icon(Icons.cloud_outlined),
+                            value: 'global',
+                            icon: Icon(Icons.layers_outlined),
+                            label: LText('全局背景'),
                           ),
                           ButtonSegment(
-                            value: SyncProviderType.githubGist,
-                            label: _AdaptiveSyncProviderLabel('GitHub'),
-                            icon: Icon(Icons.code),
-                          ),
-                          ButtonSegment(
-                            value: SyncProviderType.s3,
-                            label: _AdaptiveSyncProviderLabel('S3'),
-                            icon: Icon(Icons.storage_outlined),
+                            value: 'terminal',
+                            icon: Icon(Icons.terminal_outlined),
+                            label: LText('仅终端'),
                           ),
                         ],
-                        selected: {provider},
-                        onSelectionChanged: (value) => setState(() {
-                          provider = value.first;
-                          _syncVersions = null;
-                          _syncVersionsError = null;
-                        }),
-                      ),
-                      const SizedBox(height: 14),
-                      if (provider == SyncProviderType.webdav) ...[
-                        TextField(
-                          controller: endpoint,
-                          keyboardType: TextInputType.url,
-                          decoration: LInputDecoration(
-                            labelText: 'WebDAV 地址',
-                            hintText: 'https://dav.example.com/netcatty',
-                          ),
-                        ),
-                        const SizedBox(height: 10),
-                        TextField(
-                          controller: username,
-                          decoration: LInputDecoration(labelText: '用户名'),
-                        ),
-                        const SizedBox(height: 10),
-                        TextField(
-                          controller: providerSecret,
-                          obscureText: true,
-                          decoration: LInputDecoration(labelText: '密码 / 应用密码'),
-                        ),
-                      ] else if (provider == SyncProviderType.s3) ...[
-                        TextField(
-                          controller: endpoint,
-                          keyboardType: TextInputType.url,
-                          decoration: LInputDecoration(
-                            labelText: 'S3 Endpoint',
-                            hintText: 'https://s3.example.com',
-                          ),
-                        ),
-                        const SizedBox(height: 10),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: TextField(
-                                controller: s3Region,
-                                decoration: LInputDecoration(
-                                  labelText: 'Region',
-                                  hintText: 'us-east-1',
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: TextField(
-                                controller: s3Bucket,
-                                decoration: LInputDecoration(
-                                  labelText: 'Bucket',
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 10),
-                        TextField(
-                          controller: s3AccessKeyId,
-                          decoration: LInputDecoration(
-                            labelText: 'Access Key ID',
-                          ),
-                        ),
-                        const SizedBox(height: 10),
-                        TextField(
-                          controller: providerSecret,
-                          obscureText: true,
-                          onChanged: (_) => setState(() {}),
-                          decoration: LInputDecoration(
-                            labelText: 'Secret Access Key',
-                          ),
-                        ),
-                        const SizedBox(height: 10),
-                        TextField(
-                          controller: s3SessionToken,
-                          obscureText: true,
-                          decoration: LInputDecoration(
-                            labelText: 'Session Token（可选）',
-                          ),
-                        ),
-                        const SizedBox(height: 10),
-                        TextField(
-                          controller: s3Prefix,
-                          decoration: LInputDecoration(
-                            labelText: '对象前缀（可选）',
-                            hintText: 'netcatty/mobile',
-                          ),
-                        ),
-                        SwitchListTile(
-                          contentPadding: EdgeInsets.zero,
-                          title: const LText('使用路径式访问'),
-                          subtitle: const LText(
-                            '兼容 MinIO 等自建 S3，默认开启',
-                          ),
-                          value: s3ForcePathStyle,
-                          onChanged: (value) =>
-                              setState(() => s3ForcePathStyle = value),
-                        ),
-                        SwitchListTile(
-                          contentPadding: EdgeInsets.zero,
-                          title: const LText('允许不安全连接'),
-                          subtitle: const LText(
-                            '仅用于 HTTP 或自签名 HTTPS，存在安全风险',
-                          ),
-                          value: s3AllowInsecure,
-                          onChanged: (value) =>
-                              setState(() => s3AllowInsecure = value),
-                        ),
-                        SizedBox(
-                          width: double.infinity,
-                          child: OutlinedButton.icon(
-                            onPressed: _busy ? null : _testS3Connection,
-                            icon: const Icon(Icons.wifi_tethering_outlined),
-                            label: const LText('测试 S3 连接'),
-                          ),
-                        ),
-                        const SizedBox(height: 10),
-                        _syncVersionsCard(),
-                      ] else ...[
-                        ListTile(
-                          contentPadding: EdgeInsets.zero,
-                          leading: CircleAvatar(
-                            child: Icon(
-                              providerSecret.text.isEmpty
-                                  ? Icons.login
-                                  : Icons.check,
-                            ),
-                          ),
-                          title: LText(
-                            providerSecret.text.isEmpty
-                                ? '尚未登录 GitHub'
-                                : '已连接 GitHub',
-                          ),
-                          subtitle: LText(
-                            _githubUser == null
-                                ? '登录后自动查找或创建 Netcatty Gist'
-                                : '@$_githubUser · 自动同步私有 Gist',
-                          ),
-                        ),
-                        SizedBox(
-                          width: double.infinity,
-                          child: providerSecret.text.isEmpty
-                              ? FilledButton.icon(
-                                  onPressed: _busy ? null : _connectGitHub,
-                                  icon: const Icon(Icons.login),
-                                  label: const LText('登录 GitHub'),
-                                )
-                              : OutlinedButton.icon(
-                                  onPressed: _busy ? null : _logoutGitHub,
-                                  icon: const Icon(Icons.logout),
-                                  label: const LText('退出 GitHub'),
-                                ),
-                        ),
-                        const SizedBox(height: 10),
-                        _syncVersionsCard(),
-                        GitHubManualConfig(
-                            resourceId: resourceId,
-                            secret: providerSecret,
-                            onSecretChanged: (_) => setState(() {})),
-                      ],
-                      const SizedBox(height: 10),
-                      TextField(
-                        controller: masterPassword,
-                        obscureText: true,
-                        decoration: LInputDecoration(
-                          labelText: 'Netcatty 同步主密码',
+                        selected: {customBackgroundScope},
+                        onSelectionChanged: (value) => _setAppearance(
+                          () => customBackgroundScope = value.first,
                         ),
                       ),
                       const SizedBox(height: 6),
-                      SwitchListTile(
-                        key: const ValueKey('cloud-auto-sync'),
-                        contentPadding: EdgeInsets.zero,
-                        secondary: autoSyncState.syncing
-                            ? const SizedBox.square(
-                                dimension: 24,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2.5,
-                                ),
-                              )
-                            : const Icon(Icons.sync_outlined),
-                        title: const LText('自动同步'),
-                        subtitle: LText(_autoSyncStatus(autoSyncState)),
-                        value: autoSyncEnabled,
-                        onChanged:
-                            _busy || _savingAutoSync ? null : _setAutoSync,
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: LText(
+                          customBackgroundScope == 'global'
+                              ? '背景应用到所有页面、顶部栏和底部导航栏'
+                              : '背景仅应用到终端页面',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
                       ),
-                      const SizedBox(height: 14),
+                      const SizedBox(height: 10),
+                      _backgroundPreview(),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              key: const ValueKey(
+                                'custom-background-picker',
+                              ),
+                              onPressed: _pickBackgroundImage,
+                              icon: const Icon(Icons.image_outlined),
+                              label: LText(
+                                customBackgroundPath.isEmpty
+                                    ? '选择背景图片'
+                                    : '更换背景图片',
+                              ),
+                            ),
+                          ),
+                          if (customBackgroundPath.isNotEmpty) ...[
+                            const SizedBox(width: 8),
+                            IconButton.outlined(
+                              key: const ValueKey(
+                                'custom-background-remove',
+                              ),
+                              tooltip: localized('移除背景图片'),
+                              onPressed: _removeBackgroundImage,
+                              icon: const Icon(Icons.delete_outline),
+                            ),
+                          ],
+                        ],
+                      ),
+                      Row(
+                        children: [
+                          const LText('背景不透明度'),
+                          Expanded(
+                            child: Slider(
+                              key: const ValueKey(
+                                'custom-background-opacity',
+                              ),
+                              value: customBackgroundOpacity,
+                              min: 0.05,
+                              max: 1,
+                              divisions: 19,
+                              label:
+                                  '${(customBackgroundOpacity * 100).round()}%',
+                              onChanged: (value) => setState(
+                                () => customBackgroundOpacity = value,
+                              ),
+                              onChangeEnd: (_) => _autoSaveAppearance(),
+                            ),
+                          ),
+                          SizedBox(
+                            width: 42,
+                            child: LText(
+                              '${(customBackgroundOpacity * 100).round()}%',
+                              textAlign: TextAlign.end,
+                            ),
+                          ),
+                        ],
+                      ),
+                      DropdownButtonFormField<String>(
+                        key: ValueKey(
+                          'custom-background-alignment-$customBackgroundAlignment',
+                        ),
+                        initialValue: customBackgroundAlignment,
+                        decoration: LInputDecoration(labelText: '背景对齐方式'),
+                        items: [
+                          for (final value
+                              in supportedCustomBackgroundAlignments)
+                            DropdownMenuItem(
+                              value: value,
+                              child: LText(
+                                _backgroundAlignmentLabel(value),
+                              ),
+                            ),
+                        ],
+                        onChanged: (value) {
+                          if (value != null) {
+                            _setAppearance(
+                              () => customBackgroundAlignment = value,
+                            );
+                          }
+                        },
+                      ),
+                      const SizedBox(height: 8),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+            _note('外观设置会立即生效；移动端偏好不会覆盖桌面端专属布局字段'),
+          ]),
+        _SettingsSection.terminal => _page('终端与连接', [
+            Card(
+              margin: EdgeInsets.zero,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(14, 8, 14, 8),
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        const LText('终端字号'),
+                        Expanded(
+                          child: Slider(
+                            value: terminalFontSize,
+                            min: minTerminalFontSize,
+                            max: maxTerminalFontSize,
+                            divisions: 18,
+                            label: terminalFontSize.toStringAsFixed(0),
+                            onChanged: (value) =>
+                                setState(() => terminalFontSize = value),
+                            onChangeEnd: (_) => _autoSaveAppearance(),
+                          ),
+                        ),
+                        LText(terminalFontSize.toStringAsFixed(0)),
+                      ],
+                    ),
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const LText('系统安全键盘'),
+                      subtitle: const LText(
+                        '使用系统密码键盘并关闭联想学习；终端快捷键仍可输入 Ctrl 组合键',
+                      ),
+                      value: terminalSecureKeyboard,
+                      onChanged: _savingTerminalSecureKeyboard
+                          ? null
+                          : _setTerminalSecureKeyboard,
+                    ),
+                    SwitchListTile(
+                      key: const ValueKey('terminal-ime-suggestions'),
+                      contentPadding: EdgeInsets.zero,
+                      title: const LText('显示输入法联想词'),
+                      subtitle: const LText(
+                        '打字时输入法候选栏保持稳定、可选择联想词。关闭后每个按键都会清空输入框，候选栏会闪烁、无法选词',
+                      ),
+                      value: ref
+                          .watch(settingsControllerProvider)
+                          .terminalImeSuggestions,
+                      onChanged: ref
+                              .watch(settingsControllerProvider)
+                              .terminalSecureKeyboard
+                          ? null
+                          : (value) => ref
+                              .read(settingsControllerProvider.notifier)
+                              .updateTerminalImeSuggestions(value),
+                    ),
+                    SwitchListTile(
+                      key: const ValueKey('terminal-tap-to-keyboard'),
+                      contentPadding: EdgeInsets.zero,
+                      title: const LText('点击终端弹出键盘'),
+                      subtitle: const LText(
+                        '关闭后只能用工具栏右下角的键盘按钮弹出键盘；向上翻看历史时点击终端始终不会弹出键盘',
+                      ),
+                      value: ref
+                          .watch(settingsControllerProvider)
+                          .terminalTapToKeyboard,
+                      onChanged: (value) => ref
+                          .read(settingsControllerProvider.notifier)
+                          .updateTerminalTapToKeyboard(value),
+                    ),
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const LText('SFTP 代码高亮'),
+                      subtitle: const LText('编辑文件时显示语法颜色'),
+                      value: sftpSyntaxHighlight,
+                      onChanged: (value) =>
+                          _setAppearance(() => sftpSyntaxHighlight = value),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            _groupLabel('主机列表'),
+            Card(
+              margin: EdgeInsets.zero,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                child: Column(
+                  children: [
+                    SwitchListTile(
+                      key: const ValueKey('host-tap-connects'),
+                      contentPadding: EdgeInsets.zero,
+                      title: const LText('点击主机直接连接'),
+                      subtitle: const LText(
+                        '长按主机查看详情、复制 IP；关闭后点击主机先显示详情',
+                      ),
+                      value:
+                          ref.watch(settingsControllerProvider).hostTapConnects,
+                      onChanged: (value) => ref
+                          .read(settingsControllerProvider.notifier)
+                          .updateHostTapConnects(value),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ]),
+        _SettingsSection.island => _page('灵动岛', [
+            Card(
+              margin: EdgeInsets.zero,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                child: Column(
+                  children: [
+                    SwitchListTile(
+                      key: const ValueKey('live-activity-enabled'),
+                      contentPadding: EdgeInsets.zero,
+                      title: const LText('灵动岛显示连接'),
+                      subtitle: const LText(
+                        '切到后台时在灵动岛和锁屏显示已连接的服务器、连接时长',
+                      ),
+                      value: ref
+                          .watch(settingsControllerProvider)
+                          .liveActivityEnabled,
+                      onChanged: (value) => ref
+                          .read(settingsControllerProvider.notifier)
+                          .updateLiveActivityEnabled(value),
+                    ),
+                    SwitchListTile(
+                      key: const ValueKey('live-activity-command'),
+                      contentPadding: EdgeInsets.zero,
+                      title: const LText('灵动岛显示最近命令'),
+                      subtitle: const LText(
+                        '展开灵动岛或在锁屏上显示最后执行的命令；命令里有密码等敏感内容时建议关闭',
+                      ),
+                      value: ref
+                          .watch(settingsControllerProvider)
+                          .liveActivityShowCommand,
+                      onChanged: ref
+                              .watch(settingsControllerProvider)
+                              .liveActivityEnabled
+                          ? (value) => ref
+                              .read(settingsControllerProvider.notifier)
+                              .updateLiveActivityShowCommand(value)
+                          : null,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            _note('需要 iOS 16.2 以上；只在 App 切到后台时显示，点一下回到对应的终端'),
+          ]),
+        _SettingsSection.language => _page('语言', [
+            _group([
+              for (final code in const ['zh-CN', 'en'])
+                ListTile(
+                  key: ValueKey('language-$code'),
+                  minTileHeight: 52,
+                  title: Text(_languageLabel(code)),
+                  trailing: language == code
+                      ? Icon(
+                          Icons.check,
+                          color: Theme.of(context).colorScheme.primary,
+                        )
+                      : null,
+                  onTap: () => _setAppearance(() => language = code),
+                ),
+            ]),
+          ]),
+        _SettingsSection.sync => _page('云同步', [
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(14),
+                child: Column(
+                  children: [
+                    SegmentedButton<SyncProviderType>(
+                      expandedInsets: EdgeInsets.zero,
+                      segments: const [
+                        ButtonSegment(
+                          value: SyncProviderType.webdav,
+                          label: _AdaptiveSyncProviderLabel('WebDAV'),
+                          icon: Icon(Icons.cloud_outlined),
+                        ),
+                        ButtonSegment(
+                          value: SyncProviderType.githubGist,
+                          label: _AdaptiveSyncProviderLabel('GitHub'),
+                          icon: Icon(Icons.code),
+                        ),
+                        ButtonSegment(
+                          value: SyncProviderType.s3,
+                          label: _AdaptiveSyncProviderLabel('S3'),
+                          icon: Icon(Icons.storage_outlined),
+                        ),
+                      ],
+                      selected: {provider},
+                      onSelectionChanged: (value) => setState(() {
+                        provider = value.first;
+                        _syncVersions = null;
+                        _syncVersionsError = null;
+                      }),
+                    ),
+                    const SizedBox(height: 14),
+                    if (provider == SyncProviderType.webdav) ...[
+                      TextField(
+                        controller: endpoint,
+                        keyboardType: TextInputType.url,
+                        decoration: LInputDecoration(
+                          labelText: 'WebDAV 地址',
+                          hintText: 'https://dav.example.com/netcatty',
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      TextField(
+                        controller: username,
+                        decoration: LInputDecoration(labelText: '用户名'),
+                      ),
+                      const SizedBox(height: 10),
+                      TextField(
+                        controller: providerSecret,
+                        obscureText: true,
+                        decoration: LInputDecoration(labelText: '密码 / 应用密码'),
+                      ),
+                    ] else if (provider == SyncProviderType.s3) ...[
+                      TextField(
+                        controller: endpoint,
+                        keyboardType: TextInputType.url,
+                        decoration: LInputDecoration(
+                          labelText: 'S3 Endpoint',
+                          hintText: 'https://s3.example.com',
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: s3Region,
+                              decoration: LInputDecoration(
+                                labelText: 'Region',
+                                hintText: 'us-east-1',
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: TextField(
+                              controller: s3Bucket,
+                              decoration: LInputDecoration(
+                                labelText: 'Bucket',
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      TextField(
+                        controller: s3AccessKeyId,
+                        decoration: LInputDecoration(
+                          labelText: 'Access Key ID',
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      TextField(
+                        controller: providerSecret,
+                        obscureText: true,
+                        onChanged: (_) => setState(() {}),
+                        decoration: LInputDecoration(
+                          labelText: 'Secret Access Key',
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      TextField(
+                        controller: s3SessionToken,
+                        obscureText: true,
+                        decoration: LInputDecoration(
+                          labelText: 'Session Token（可选）',
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      TextField(
+                        controller: s3Prefix,
+                        decoration: LInputDecoration(
+                          labelText: '对象前缀（可选）',
+                          hintText: 'netcatty/mobile',
+                        ),
+                      ),
+                      SwitchListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: const LText('使用路径式访问'),
+                        subtitle: const LText(
+                          '兼容 MinIO 等自建 S3，默认开启',
+                        ),
+                        value: s3ForcePathStyle,
+                        onChanged: (value) =>
+                            setState(() => s3ForcePathStyle = value),
+                      ),
+                      SwitchListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: const LText('允许不安全连接'),
+                        subtitle: const LText(
+                          '仅用于 HTTP 或自签名 HTTPS，存在安全风险',
+                        ),
+                        value: s3AllowInsecure,
+                        onChanged: (value) =>
+                            setState(() => s3AllowInsecure = value),
+                      ),
                       SizedBox(
                         width: double.infinity,
-                        child: FilledButton.icon(
-                          key: const ValueKey('cloud-sync-now'),
-                          onPressed: _busy ? null : _sync,
-                          icon: const Icon(Icons.sync_outlined),
-                          label: const LText('立即同步'),
+                        child: OutlinedButton.icon(
+                          onPressed: _busy ? null : _testS3Connection,
+                          icon: const Icon(Icons.wifi_tethering_outlined),
+                          label: const LText('测试 S3 连接'),
                         ),
                       ),
-                      if (_busy)
-                        const Padding(
-                          padding: EdgeInsets.only(top: 12),
-                          child: LinearProgressIndicator(),
+                      const SizedBox(height: 10),
+                      _syncVersionsCard(),
+                    ] else ...[
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: CircleAvatar(
+                          child: Icon(
+                            providerSecret.text.isEmpty
+                                ? Icons.login
+                                : Icons.check,
+                          ),
                         ),
+                        title: LText(
+                          providerSecret.text.isEmpty
+                              ? '尚未登录 GitHub'
+                              : '已连接 GitHub',
+                        ),
+                        subtitle: LText(
+                          _githubUser == null
+                              ? '登录后自动查找或创建 Netcatty Gist'
+                              : '@$_githubUser · 自动同步私有 Gist',
+                        ),
+                      ),
+                      SizedBox(
+                        width: double.infinity,
+                        child: providerSecret.text.isEmpty
+                            ? FilledButton.icon(
+                                onPressed: _busy ? null : _connectGitHub,
+                                icon: const Icon(Icons.login),
+                                label: const LText('登录 GitHub'),
+                              )
+                            : OutlinedButton.icon(
+                                onPressed: _busy ? null : _logoutGitHub,
+                                icon: const Icon(Icons.logout),
+                                label: const LText('退出 GitHub'),
+                              ),
+                      ),
+                      const SizedBox(height: 10),
+                      _syncVersionsCard(),
+                      GitHubManualConfig(
+                          resourceId: resourceId,
+                          secret: providerSecret,
+                          onSecretChanged: (_) => setState(() {})),
                     ],
-                  ),
-                ),
-              ),
-              _header('Catty Agent', '使用 OpenAI 兼容接口连续对话，命令执行前始终确认'),
-              ListTile(
-                leading: const Icon(Icons.dns_outlined),
-                title: const LText('管理多个 AI 服务商'),
-                subtitle: const LText('独立地址、密钥、模型与兼容参数，仅保存在本机'),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: _openAiProviders,
-              ),
-              _header('数据管理', '导入导出会保留桌面端未知字段和插件数据'),
-              Card(
-                child: Column(
-                  children: [
-                    ListTile(
-                      leading: const Icon(Icons.key_outlined),
-                      title: const LText('SSH 密钥库'),
-                      subtitle: const LText('导入私钥与口令'),
-                      onTap: () => showModalBottomSheet<void>(
-                        context: context,
-                        isScrollControlled: true,
-                        useSafeArea: true,
-                        builder: (_) => const KeychainSheet(),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: masterPassword,
+                      obscureText: true,
+                      decoration: LInputDecoration(
+                        labelText: 'Netcatty 同步主密码',
                       ),
                     ),
-                    const Divider(height: 1),
-                    ListTile(
-                      leading: const Icon(Icons.file_upload_outlined),
-                      title: const LText('导入 Netcatty JSON'),
-                      subtitle: const LText('支持桌面端解密后的保险库数据'),
-                      onTap: _import,
+                    const SizedBox(height: 6),
+                    SwitchListTile(
+                      key: const ValueKey('cloud-auto-sync'),
+                      contentPadding: EdgeInsets.zero,
+                      secondary: autoSyncState.syncing
+                          ? const SizedBox.square(
+                              dimension: 24,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2.5,
+                              ),
+                            )
+                          : const Icon(Icons.sync_outlined),
+                      title: const LText('自动同步'),
+                      subtitle: LText(_autoSyncStatus(autoSyncState)),
+                      value: autoSyncEnabled,
+                      onChanged: _busy || _savingAutoSync ? null : _setAutoSync,
                     ),
-                    const Divider(height: 1),
-                    ListTile(
-                      leading: const Icon(Icons.file_download_outlined),
-                      title: const LText('导出保险库 JSON'),
-                      subtitle: const LText('导出包含凭据，请妥善保存'),
-                      onTap: _export,
+                    const SizedBox(height: 14),
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton.icon(
+                        key: const ValueKey('cloud-sync-now'),
+                        onPressed: _busy ? null : _sync,
+                        icon: const Icon(Icons.sync_outlined),
+                        label: const LText('立即同步'),
+                      ),
                     ),
+                    if (_busy)
+                      const Padding(
+                        padding: EdgeInsets.only(top: 12),
+                        child: LinearProgressIndicator(),
+                      ),
                   ],
                 ),
               ),
-              _header('安全', null),
-              const Card(
-                child: Column(
-                  children: [
-                    ListTile(
-                      leading: Icon(Icons.security),
-                      title: LText('系统安全存储'),
-                      subtitle: LText('Android Keystore / iOS Keychain'),
-                    ),
-                    Divider(height: 1),
-                    ListTile(
-                      leading: Icon(Icons.fingerprint),
-                      title: LText('服务器身份验证'),
-                      subtitle: LText('每次首次连接显示 SHA-256 主机指纹'),
-                    ),
-                  ],
-                ),
-              ),
-              _header('关于与更新', '自动检查 GitHub 上的最新正式版本'),
-              Card(child: _updateCheckTile()),
-              const SizedBox(height: 20),
-              Center(
-                child: FutureBuilder<PackageInfo>(
-                  future: _packageInfo,
-                  builder: (context, snapshot) => LText(
-                    snapshot.hasData
-                        ? 'Netcatty Mobile ${snapshot.data!.version} · GPL-3.0-or-later'
-                        : 'Netcatty Mobile · GPL-3.0-or-later',
+            ),
+            _note('兼容桌面端 netcatty-vault.json 加密格式'),
+          ]),
+        _SettingsSection.security => _page('安全与隐私', [
+            const Card(
+              child: Column(
+                children: [
+                  ListTile(
+                    leading: Icon(Icons.security),
+                    title: LText('系统安全存储'),
+                    subtitle: LText('Android Keystore / iOS Keychain'),
                   ),
-                ),
+                  Divider(height: 1),
+                  ListTile(
+                    leading: Icon(Icons.fingerprint),
+                    title: LText('服务器身份验证'),
+                    subtitle: LText('每次首次连接显示 SHA-256 主机指纹'),
+                  ),
+                ],
               ),
-            ],
+            ),
+          ]),
+      };
+
+  Widget _page(String title, List<Widget> children) => Scaffold(
+        appBar: AppBar(title: LText(title)),
+        body: ListView(
+          padding: EdgeInsets.fromLTRB(
+            16,
+            4,
+            16,
+            MediaQuery.paddingOf(context).bottom + 20,
+          ),
+          children: children,
+        ),
+      );
+
+  Widget _groupLabel(String text) => Padding(
+        padding: const EdgeInsets.fromLTRB(18, 22, 18, 8),
+        child: LText(
+          text,
+          style: TextStyle(
+            fontSize: 13,
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
           ),
         ),
       );
 
-  Widget _header(String title, String? subtitle) => Padding(
-        padding: const EdgeInsets.fromLTRB(4, 20, 4, 8),
+  Widget _note(String text) => Padding(
+        padding: const EdgeInsets.fromLTRB(18, 8, 18, 0),
+        child: LText(
+          text,
+          style: TextStyle(
+            fontSize: 12.5,
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
+        ),
+      );
+
+  /// One inset-grouped panel; rows are separated by dividers that start at
+  /// the text, as in iOS settings.
+  Widget _group(List<Widget> rows) => Card(
+        margin: EdgeInsets.zero,
+        clipBehavior: Clip.antiAlias,
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            LText(title, style: const TextStyle(fontWeight: FontWeight.w600)),
-            if (subtitle != null)
-              LText(
-                subtitle,
-                style: TextStyle(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  fontSize: 12,
-                ),
-              ),
+            for (var index = 0; index < rows.length; index++) ...[
+              if (index > 0) const Divider(indent: 56, height: 1),
+              rows[index],
+            ],
           ],
         ),
       );
+
+  Widget _navRow({
+    Key? key,
+    required IconData icon,
+    required String title,
+    String? subtitle,
+    String? value,
+    _SettingsSection? section,
+    VoidCallback? onTap,
+  }) {
+    final muted = Theme.of(context).colorScheme.onSurfaceVariant;
+    return ListTile(
+      key: key,
+      minTileHeight: 52,
+      leading: Icon(icon, size: 22),
+      title: LText(title),
+      subtitle: subtitle == null ? null : LText(subtitle),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (value != null)
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 150),
+              child: LText(
+                value,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(color: muted, fontSize: 15),
+              ),
+            ),
+          if (section != null) ...[
+            const SizedBox(width: 2),
+            Icon(Icons.chevron_right, size: 20, color: muted),
+          ],
+        ],
+      ),
+      onTap: section == null ? onTap : () => setState(() => _section = section),
+    );
+  }
+
+  /// Language names are shown in their own language.
+  String _languageLabel(String code) => switch (code) {
+        'en' => 'English',
+        _ => '简体中文',
+      };
+
+  /// Appearance changes apply immediately, like iOS settings.
+  void _setAppearance(VoidCallback change) {
+    setState(change);
+    _autoSaveAppearance();
+  }
+
+  void _autoSaveAppearance() => unawaited(_saveAppearance(silent: true));
 
   Widget _syncVersionsCard() {
     final colors = Theme.of(context).colorScheme;
@@ -1343,6 +1571,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         customBackgroundPath = stored;
         customBackgroundEnabled = true;
       });
+      _autoSaveAppearance();
     } catch (error) {
       _message('选择背景图片失败：$error');
     }
@@ -1358,6 +1587,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       customBackgroundPath = '';
       customBackgroundEnabled = false;
     });
+    _autoSaveAppearance();
   }
 
   String _backgroundAlignmentLabel(String value) => switch (value) {
@@ -1372,7 +1602,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         _ => '居中',
       };
 
-  Future<void> _saveAppearance() async {
+  Future<void> _saveAppearance({bool silent = false}) async {
     final current = ref.read(settingsControllerProvider);
     await ref.read(settingsControllerProvider.notifier).update(
           current.copyWith(
@@ -1395,7 +1625,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         previousBackgroundPath != customBackgroundPath) {
       await _backgroundImageService.remove(previousBackgroundPath);
     }
-    _message('外观设置已保存');
+    if (!silent) _message('外观设置已保存');
   }
 
   Future<void> _setTerminalSecureKeyboard(bool value) async {
@@ -1429,7 +1659,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         selectedId: uiThemeId,
       ),
     );
-    if (selected != null && mounted) setState(() => uiThemeId = selected);
+    if (selected != null && mounted) _setAppearance(() => uiThemeId = selected);
   }
 
   Future<void> _import() async {
@@ -1491,3 +1721,5 @@ class _AdaptiveSyncProviderLabel extends StatelessWidget {
         ),
       );
 }
+
+enum _SettingsSection { appearance, terminal, island, language, sync, security }
