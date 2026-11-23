@@ -1021,25 +1021,25 @@ class _HostTree extends StatelessWidget {
               for (final host in children)
                 Builder(
                   builder: (item) => ListTile(
-                  dense: true,
-                  visualDensity: const VisualDensity(vertical: -2),
-                  contentPadding: const EdgeInsets.only(left: 20, right: 4),
-                  onTap: () => onTap(host),
-                  onLongPress: () => onLongPress(host, item),
-                  leading: _HostIcon(
-                    host: host,
-                    size: 34,
-                    connected: connectedHostIds.contains(host.id),
+                    dense: true,
+                    visualDensity: const VisualDensity(vertical: -2),
+                    contentPadding: const EdgeInsets.only(left: 20, right: 4),
+                    onTap: () => onTap(host),
+                    onLongPress: () => onLongPress(host, item),
+                    leading: _HostIcon(
+                      host: host,
+                      size: 34,
+                      connected: connectedHostIds.contains(host.id),
+                    ),
+                    title: LText(host.label),
+                    subtitle:
+                        LText('${host.username}@${host.hostname}:${host.port}'),
+                    trailing: IconButton(
+                      tooltip: localized('编辑'),
+                      onPressed: () => onEdit(host),
+                      icon: const Icon(Icons.more_vert),
+                    ),
                   ),
-                  title: LText(host.label),
-                  subtitle:
-                      LText('${host.username}@${host.hostname}:${host.port}'),
-                  trailing: IconButton(
-                    tooltip: localized('编辑'),
-                    onPressed: () => onEdit(host),
-                    icon: const Icon(Icons.more_vert),
-                  ),
-                ),
                 ),
             ],
           ),

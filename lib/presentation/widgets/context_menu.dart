@@ -41,7 +41,8 @@ Future<T?> showContextMenu<T>({
         anchor: anchor,
         preview: preview,
         actions: actions,
-        barrierLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,
+        barrierLabel:
+            MaterialLocalizations.of(context).modalBarrierDismissLabel,
       ),
     );
 
@@ -187,7 +188,8 @@ class _ContextMenuLayout extends MultiChildLayoutDelegate {
     if (previewTop < top) previewTop = top;
     positionChild(_Slot.preview, Offset(previewLeft, previewTop));
     final menuLeft = previewLeft
-        .clamp(_margin, math.max(_margin, size.width - _margin - menuSize.width))
+        .clamp(
+            _margin, math.max(_margin, size.width - _margin - menuSize.width))
         .toDouble();
     positionChild(
       _Slot.menu,

@@ -50,7 +50,8 @@ class _NetcattyAppState extends ConsumerState<NetcattyApp>
   /// every incoming link (also ssh:// ones) is consumed here and never
   /// reaches the Navigator.
   @override
-  Future<bool> didPushRouteInformation(RouteInformation routeInformation) async {
+  Future<bool> didPushRouteInformation(
+      RouteInformation routeInformation) async {
     final id = sessionIdFromDeepLink(routeInformation.uri);
     if (id == null) return true;
     final sessions = ref.read(sessionControllerProvider);
