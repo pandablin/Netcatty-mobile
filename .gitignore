@@ -5,11 +5,15 @@
 .pub-cache/
 .pub/
 build/
+dist/
+__pycache__/
 coverage/
 android/.gradle/
 android/.kotlin/
 android/local.properties
 android/key.properties
+*.keystore
+*.jks
 ios/Pods/
 ios/.symlinks/
 ios/Flutter/ephemeral/

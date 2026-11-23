@@ -1,4 +1,7 @@
 const englishTranslations = <String, String>{
+  'GitHub 仓库中没有可用的 Release':
+      'No usable release was found in the GitHub repository',
+  '最新 Release': 'latest Release',
   '当前安装包未配置 GitHub OAuth Client ID，请使用已配置的版本或手动填写 Token':
       'This build has no GitHub OAuth Client ID. Use a configured build or enter a token manually',
   '文件名包含不安全的路径，已停止传输': 'The filename contains an unsafe path. Transfer stopped',
@@ -659,6 +662,10 @@ const englishTranslations = <String, String>{
 /// ultimately rendered by a localized text widget.
 const englishReplacements = <(String, String)>[
   (
+    'GitHub 仓库中没有可用的 Release',
+    'No usable release was found in the GitHub repository'
+  ),
+  (
     '当前安装包未配置 GitHub OAuth Client ID，请使用已配置的版本或手动填写 Token',
     'This build has no GitHub OAuth Client ID. Use a configured build or enter a token manually'
   ),
@@ -1076,6 +1083,7 @@ const englishReplacements = <(String, String)>[
   ('发现新版本', 'New version available'),
   ('点按前往下载', 'tap to download'),
   ('点按查看最新 Release', 'tap to view the latest Release'),
+  ('最新 Release', 'latest Release'),
   ('最新正式版', 'latest stable release'),
   ('当前版本', 'Current version'),
   ('GitHub 授权已取消', 'GitHub authorization cancelled'),

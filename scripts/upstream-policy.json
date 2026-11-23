@@ -1,0 +1,32 @@
+{
+  "upstream_url": "https://github.com/wxte/Netcatty-mobile.git",
+  "upstream_branch": "main",
+  "upstream_ref": "refs/remotes/upstream/main",
+  "candidate_prefix": "automation/upstream-",
+  "protected_paths": [".github/**", "scripts/**", "android/**", ".gitignore", ".gitattributes", "pubspec.lock", "**/pubspec.lock", "**/pubspec.yaml", "tests/test_sync_upstream.py"],
+  "critical_tests": [
+    "test/github_auth_service_test.dart",
+    "test/bounded_http_client_test.dart",
+    "test/netcatty_crypto_test.dart",
+    "test/sftp_entry_name_security_test.dart",
+    "test/terminal_clipboard_security_test.dart",
+    "test/webdav_desktop_compatibility_test.dart",
+    "test/snippet_group_test.dart",
+    "test/snippets_screen_test.dart",
+    "test/snippets_mobile_layout_test.dart",
+    "test/localization_coverage_test.dart",
+    "test/update_check_service_test.dart",
+    "test/settings_navigation_test.dart",
+    "test/context_menu_test.dart",
+    "tests/test_sync_upstream.py"
+  ],
+  "required_text": {
+    "lib/infrastructure/sync/github_auth_service.dart": ["String.fromEnvironment('GITHUB_OAUTH_CLIENT_ID')", "_requireClientId()"],
+    "lib/infrastructure/update_check_service.dart": ["https://api.github.com/repos/pandablin/Netcatty-mobile/releases", "https://github.com/pandablin/Netcatty-mobile/releases"],
+    "android/app/build.gradle.kts": ["applicationId = \"app.netcatty.mobile.audit\""],
+    "lib/domain/models/snippet_group.dart": ["groupCommandSnippets", "snippetPackages", "packageName"],
+    "lib/presentation/widgets/snippet_group_list.dart": ["class SnippetGroupList"],
+    "lib/presentation/widgets/snippet_edit_sheet.dart": ["class SnippetEditSheet", "'package': _package.text.trim()"]
+  },
+  "forbidden_runtime_text": ["Ov23lidR2u8OIkHW19nk", "https://api.github.com/repos/wxte/Netcatty-mobile", "https://github.com/wxte/Netcatty-mobile"]
+}

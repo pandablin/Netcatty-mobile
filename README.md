@@ -38,7 +38,7 @@ Netcatty 的 Android / iOS 移动端实现：一个面向服务器管理、SSH �
 - **完整中英文界面**：可在设置中切换中文或英文，界面文案覆盖由自动化测试持续检查。
 - **安全优先**：密码、私钥、同步主密码和 API Key 分别保存到 Android Keystore / iOS Keychain；云端保险库采用 PBKDF2-SHA256 与 AES-256-GCM 加密。
 - **高度可定制**：网格、列表、树形三种主机视图，浅色/深色主题库，命令片段、可排序的终端快捷键，以及支持全局/仅终端范围、不透明度和九宫格对齐的自定义背景图片。
-- **内置更新检查**：设置页跟踪 wxte 上游最新正式 Release；本安卓定制包从本仓库 [Releases](https://github.com/pandablin/Netcatty-mobile/releases) 下载。
+- **内置更新检查**：设置页检查本仓库已发布的 Release（包括预发布、不含草稿），并打开本仓库对应版本的下载页面。源码与安卓定制包均来自 [pandablin/Netcatty-mobile](https://github.com/pandablin/Netcatty-mobile)。
 
 ## 特色功能预览
 
@@ -180,15 +180,15 @@ Netcatty 的 Android / iOS 移动端实现：一个面向服务器管理、SSH �
 
 ## 下载与安装
 
-前往仓库的 [Releases](https://github.com/wxte/Netcatty-mobile/releases/latest) 页面：
+前往本仓库的 [Releases](https://github.com/pandablin/Netcatty-mobile/releases) 页面：
 
-- Android：现代手机优先下载体积更小的 `netcatty-mobile-vX.Y.Z-android-arm64-v8a.apk`；旧款 32 位设备使用 `armeabi-v7a`，模拟器等 x86 设备使用 `x86_64`。无法确定架构时下载 `netcatty-mobile-vX.Y.Z-android.apk` 通用包。同一发布签名生成的后续版本可直接覆盖安装。
-- iOS：下载 `netcatty-mobile-vX.Y.Z-ios-unsigned.ipa`，使用 AltStore、SideStore、Sideloadly 等工具以自己的 Apple ID 重签后安装。免费 Apple ID 通常需要每 7 天重新签名。
+- Android：本分支的 ARM64 定制包命名为 `Netcatty-X.Y.Z-android-arm64.apk`，应用名称为 **Netcatty**。已发布测试包使用 `app.netcatty.mobile.audit`；覆盖升级需要包名、签名证书与当前安装版本一致，且 `versionCode` 递增。可用架构和安装要求以该 Release 的附件及构建清单为准。
+- iOS：若该版本提供 `netcatty-mobile-vX.Y.Z-ios-unsigned.ipa`，可使用 AltStore、SideStore、Sideloadly 等工具以自己的 Apple ID 重签后安装。免费 Apple ID 通常需要每 7 天重新签名；仅合入 iOS 源码不代表该版本已构建或验证 IPA。
 - 完整性校验：GitHub Release 的安装包资产会直接显示 SHA-256 Digest，可与下载文件的散列值核对。
 
-Beta 版本会在 Release 页面标记为 Pre-release，不会出现在应用内的正式版更新检查中；需要测试的用户可直接打开 Releases 页面手动下载。
+预发布版本在 Release 页面标记为 Pre-release。本定制分支的更新检查也会纳入已发布的预发布版本，按可用版本号提示更新；草稿不会进入更新检查。检查更新与下载入口均指向本仓库。
 
-每次推送和 PR 都会触发 [Mobile CI](https://github.com/wxte/Netcatty-mobile/actions/workflows/mobile.yml)。成功任务的 Artifacts 中也会提供 Android APK 和可重签 iOS IPA，默认保留 30 天。
+本仓库的 [Mobile CI](https://github.com/pandablin/Netcatty-mobile/actions/workflows/mobile.yml) 和 [Actions](https://github.com/pandablin/Netcatty-mobile/actions) 页面提供检查与构建记录。构建成功及已上传的产物以对应 Run 为准，Artifacts 默认保留 30 天。上游同步与自动发布的配置、失败处理及验收条件见 [上游同步说明](docs/UPSTREAM_SYNC.md)。
 
 ## 开发
 
@@ -225,14 +225,15 @@ GitHub 网页授权页上的应用名称与所属账号由 **OAuth Client ID** �
 
 ```bash
 flutter run --dart-define="GITHUB_OAUTH_CLIENT_ID=<your-client-id>"
-flutter build apk --release --dart-define="GITHUB_OAUTH_CLIENT_ID=<your-client-id>"
+flutter build apk --release --split-per-abi --target-platform android-arm64 \
+  --dart-define="GITHUB_OAUTH_CLIENT_ID=<your-client-id>"
 ```
 
-3. 使用本仓库 CI 时，在 **仓库 Settings → Secrets and variables → Actions → Variables** 新增 Repository variable `NETCATTY_GITHUB_OAUTH_CLIENT_ID`，值为该公开 Client ID。Android 和 iOS job 使用同名环境变量，将其值传给 Dart 编译参数 `GITHUB_OAUTH_CLIENT_ID`。
+3. 使用本仓库 CI 时，在 **仓库 Settings → Secrets and variables → Actions → Variables** 新增 Repository variable `NETCATTY_GITHUB_OAUTH_CLIENT_ID`，值为该公开 Client ID。Android 签名构建使用同名环境变量，将其值传给 Dart 编译参数 `GITHUB_OAUTH_CLIENT_ID`；手动构建 iOS 时仍通过上述 Dart 参数注入。
 
 注意这两个名字属于不同层：GitHub 仓库配置变量使用 `NETCATTY_GITHUB_OAUTH_CLIENT_ID`，因为 [GitHub 禁止配置变量以 `GITHUB_` 开头](https://docs.github.com/en/actions/reference/workflows-and-actions/variables#naming-conventions-for-configuration-variables)；本地和 CI 的 `--dart-define` 参数名仍是 `GITHUB_OAUTH_CLIENT_ID`，不要改成带 `NETCATTY_` 的名字。
 
-未配置时，CI 会明确警告但继续构建；安装包中的 GitHub Device Flow 登录不可用，不会回退到其他人的 OAuth 应用。手动 Token、WebDAV 和 S3 仍可使用。Client ID 是编译期设置，修改变量后需要重新构建安装包。当前申请权限仍为 `gist read:user`，请在 GitHub 授权页核对应用所属账号和权限。
+本地未注入 Client ID 的构建中，GitHub Device Flow 登录不可用，不会回退到其他人的 OAuth 应用；手动 Token、WebDAV 和 S3 仍可使用。本仓库的自动签名构建和发布要求配置批准的自有 Client ID，缺失或不匹配会阻止发布。Client ID 是编译期设置，修改变量后需要重新构建安装包。当前申请权限仍为 `gist read:user`，请在 GitHub 授权页核对应用所属账号和权限。
 
 **此 Device Flow 配置不需要 Client Secret，也不需要把 GitHub Token 提供给构建流程。** 不要把 OAuth Client Secret、GitHub Token、主机凭据或签名私钥提交到仓库。
 

@@ -1246,7 +1246,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               ? '当前版本 ${result.currentVersion} · 点按前往下载'
               : result.isLatest
                   ? '当前版本 ${result.currentVersion} · 点按查看最新 Release'
-                  : '当前 ${result.currentVersion} · 最新正式版 ${result.latestVersion}';
+                  : '当前 ${result.currentVersion} · 最新 Release ${result.latestVersion}';
           final icon = result.updateAvailable
               ? Icons.system_update_alt
               : result.isLatest

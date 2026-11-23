@@ -1,0 +1,55 @@
+name: Sync upstream
+
+on:
+  schedule:
+    - cron: '17 */6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: netcatty-upstream-sync
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    if: github.repository == 'pandablin/Netcatty-mobile'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Prepare a protected merge candidate
+        id: sync
+        run: python -B scripts/sync_upstream.py --repo .
+      - name: Queue Android validation and release
+        if: steps.sync.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BRANCH: ${{ steps.sync.outputs.branch }}
+          SOURCE_SHA: ${{ steps.sync.outputs.sha }}
+          BASE_SHA: ${{ steps.sync.outputs.base_sha }}
+          UPSTREAM_SHA: ${{ steps.sync.outputs.upstream_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          EXISTING=$(git ls-remote origin "refs/heads/$BRANCH" | cut -f1)
+          if [[ -n "$EXISTING" && "$EXISTING" != "$SOURCE_SHA" ]]; then
+            # Reuse an identical candidate after a transient CI failure.
+            git fetch origin "$BRANCH"
+            [[ "$(git rev-parse "$EXISTING^{tree}")" == "$(git rev-parse "$SOURCE_SHA^{tree}")" ]]
+            [[ "$(git rev-parse "$EXISTING^1")" == "$BASE_SHA" ]]
+            git merge-base --is-ancestor "$UPSTREAM_SHA" "$EXISTING"
+            SOURCE_SHA="$EXISTING"
+          fi
+          git -c 'credential.helper=!gh auth git-credential' push origin "$SOURCE_SHA:refs/heads/$BRANCH"
+          gh workflow run mobile.yml --repo pandablin/Netcatty-mobile --ref main \
+            -f "source_ref=$BRANCH" -f promote=true -f "base_sha=$BASE_SHA" -f "upstream_sha=$UPSTREAM_SHA"
+      - name: No upstream changes
+        if: steps.sync.outputs.changed != 'true'
+        run: echo 'Upstream is already included; no build or release required.' >> "$GITHUB_STEP_SUMMARY"

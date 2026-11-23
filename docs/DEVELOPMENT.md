@@ -19,7 +19,7 @@ Windows 工作区路径包含空格时，某些 Native Asset Hook 可能错误�
 ## 初始化
 
 ```bash
-git clone https://github.com/kmh1145/Netcatty-mobile.git
+git clone https://github.com/pandablin/Netcatty-mobile.git
 cd Netcatty-mobile
 flutter pub get
 flutter doctor -v
@@ -37,7 +37,7 @@ flutter run --dart-define="GITHUB_OAUTH_CLIENT_ID=<your-client-id>"
 
 作用域由应用请求 `gist read:user`。Client ID 可以随客户端分发，此流程无需 Client Secret。Client Secret、访问 Token 和用户授权码不得写入源码、文档、Issue 或日志。
 
-本仓库 CI 的 Android、iOS job 从 Repository variable `NETCATTY_GITHUB_OAUTH_CLIENT_ID` 读取同一个配置，并使用同名 job 环境变量。设置入口为 **仓库 Settings → Secrets and variables → Actions → Variables**；不使用包含其他人 Client ID 的硬编码，也不要求 Token 或 Client Secret。变量为空时只警告并继续构建，GitHub Device Flow 在运行时明确不可用，手动 Token、WebDAV/S3 不受影响。配置变更只影响重新构建的安装包。
+本仓库 CI 的 Android 签名构建从 Repository variable `NETCATTY_GITHUB_OAUTH_CLIENT_ID` 读取配置，并使用同名环境变量。设置入口为 **仓库 Settings → Secrets and variables → Actions → Variables**；这项 OAuth 配置不需要用户 Token 或 Client Secret。自动签名构建和发布要求该变量配置为本仓库批准的自有 Client ID，缺失或不匹配时停止发布。本地构建可以省略该配置，此时 GitHub Device Flow 在运行时明确不可用，手动 Token、WebDAV/S3 不受影响。手动 iOS 构建也使用 Dart 参数显式注入 ID；配置变更只影响重新构建的安装包。
 
 这项 GitHub 配置变量不能命名为 `GITHUB_OAUTH_CLIENT_ID`，因为 [GitHub 禁止配置变量使用 `GITHUB_` 前缀](https://docs.github.com/en/actions/reference/workflows-and-actions/variables#naming-conventions-for-configuration-variables)。CI 将 `NETCATTY_GITHUB_OAUTH_CLIENT_ID` 的值映射到 `--dart-define="GITHUB_OAUTH_CLIENT_ID=..."`；Dart 读取的编译参数名和本地构建命令仍保持 `GITHUB_OAUTH_CLIENT_ID`。
 
@@ -80,7 +80,7 @@ flutter build apk --debug
 Release APK / App Bundle：
 
 ```bash
-flutter build apk --release \
+flutter build apk --release --split-per-abi --target-platform android-arm64 \
   --dart-define="GITHUB_OAUTH_CLIENT_ID=<your-client-id>"
 flutter build appbundle --release \
   --dart-define="GITHUB_OAUTH_CLIENT_ID=<your-client-id>"
@@ -185,30 +185,22 @@ flutter test test/cloud_sync_service_test.dart test/netcatty_crypto_test.dart te
 
 ## GitHub Actions
 
-`.github/workflows/mobile.yml` 在 PR 和 `main` Push 时运行：
+本仓库的 [Mobile CI](https://github.com/pandablin/Netcatty-mobile/actions/workflows/mobile.yml) 定义于 `.github/workflows/mobile.yml`，可在 [Actions](https://github.com/pandablin/Netcatty-mobile/actions) 查看实际触发和完成情况。上游同步与自动发布的配置及验收另见 [上游同步说明](UPSTREAM_SYNC.md)。不要仅凭一次自动 Push 就认定后续构建已经运行。
 
-### test Job
+检查和签名构建在不同 job/虚拟机中进行：检查阶段运行 `flutter pub get`、格式检查、`flutter analyze`、完整 `flutter test`，不接触签名 Secrets；构建阶段按检查阶段实际使用的提交 SHA 获取源码，生成 ARM64 APK，并核对安装身份、签名及摘要。以 workflow 中的具体触发条件和 Run 记录为准。
 
-1. `flutter pub get`
-2. 格式检查
-3. `flutter analyze`
-4. `flutter test`
-5. 使用持久 Android 签名构建通用 APK，以及 `arm64-v8a`、`armeabi-v7a`、`x86_64` 三个分架构 APK
-6. 上传仅包含 APK 的 Artifact
-
-需要的 Secrets：
+自动发布需要完整的签名 Secrets：
 
 - `ANDROID_KEYSTORE_BASE64`
 - `ANDROID_KEYSTORE_PASSWORD`
+- `ANDROID_KEY_ALIAS`
 - `ANDROID_KEY_PASSWORD`
 
-### ios Job
+公开 OAuth 配置仍为 Repository variable `NETCATTY_GITHUB_OAUTH_CLIENT_ID`。签名缺失或证书与维护者固定的已发布证书不符时，禁止自动发布，不回退到随机调试密钥。Android 包名保持 `app.netcatty.mobile.audit`，显示名称为 Netcatty。
 
-1. 无签名构建 Release iOS App
-2. 打包 `netcatty-mobile-vX.Y.Z-ios-unsigned.ipa`
-3. 上传仅包含 IPA 的 Artifact
+Android 发布 APK 命名为 `Netcatty-X.Y.Z-android-arm64.apk`，构建不使用 Actions Run Number 覆盖版本。`versionName` 与基础 Build Number 取自经检查的 `pubspec.yaml`；在本分支使用的 `--split-per-abi --target-platform android-arm64` 构建中，Flutter 为 ARM64 添加 2000 偏移，因此最终 APK 的 `versionCode = 基础 Build Number + 2000`，例如 `+49` 对应 `2049`。上游同步准备脚本负责递增版本：上游语义版本更高则取上游版本，否则本地 patch 加一；基础 Build Number 为本地和上游较大值再加一。Artifact 的保留时间和名称以工作流为准。
 
-Android 通用安装包命名为 `netcatty-mobile-vX.Y.Z-android.apk`，分架构包分别追加 `-arm64-v8a`、`-armeabi-v7a`、`-x86_64`。现代实体设备优先提供 `arm64-v8a`，无法确认架构时使用通用包。Artifact 默认保留 30 天，Artifact 名称还会追加 Actions Run Number 以便区分同版本的不同构建。CI 的 Android `versionCode` 使用 Actions Run Number，以保证同一签名下可覆盖升级；正式 Release 的用户可见版本和安装包文件名均由 `pubspec.yaml` 的 Build Name 决定。
+iOS 不参与这条 Android 自动发布链路；如需提供 IPA，应由维护者另行手动构建并核验对应源码、扩展及安装要求。不能将 Android 成功描述为 iOS 已验证。
 
 ## 版本号
 
@@ -219,7 +211,7 @@ version: MAJOR.MINOR.PATCH+BUILD
 ```
 
 - `MAJOR.MINOR.PATCH` 映射 Android `versionName`、iOS `CFBundleShortVersionString`。
-- `BUILD` 映射 Android `versionCode`、iOS `CFBundleVersion`；本地发布时必须单调增加。
+- `BUILD` 是基础构建号，映射 iOS `CFBundleVersion`；本分支 ARM64 split APK 的实际 Android `versionCode` 为 `BUILD + 2000`。发布时基础构建号必须单调增加，并核验 APK 的实际值。
 - 设置页底部通过 `package_info_plus` 读取构建信息，不要再硬编码一份版本字符串。
 
 修改版本后运行一次 `flutter pub get`，并检查 Android/iOS 构建输出与设置页。
@@ -230,23 +222,18 @@ version: MAJOR.MINOR.PATCH+BUILD
 2. 更新 `pubspec.yaml` 的版本和 Build Number。
 3. 更新 README、开发文档和 Release Notes。
 4. 执行格式检查、`flutter analyze`、完整 `flutter test` 和本地 Android 构建。
-5. 推送 `main`，等待 Mobile CI 的 test 与 ios Job 全部成功。
-6. 下载同一次 CI Run 的 Android/iOS Artifacts，确认包含：
-   - `netcatty-mobile-vX.Y.Z-android.apk`（通用包）
-   - `netcatty-mobile-vX.Y.Z-android-arm64-v8a.apk`
-   - `netcatty-mobile-vX.Y.Z-android-armeabi-v7a.apk`
-   - `netcatty-mobile-vX.Y.Z-android-x86_64.apk`
-   - `netcatty-mobile-vX.Y.Z-ios-unsigned.ipa`
-7. 创建带注释的 `vX.Y.Z` Tag，并以同名 GitHub Release 发布全部安装包。不要额外上传 `.sha256` 文件；GitHub 会在 Release 资产信息中显示每个文件的 SHA-256 Digest。
-8. 检查 `/releases/latest`、README 徽章、安装包下载和 GitHub 显示的 Digest。
+5. 使用检查与签名构建流水线验证同一候选提交；自动流程在全部检查通过后才确认 `main` 未变并快进更新。不要假定机器人 Push 会触发另一轮构建。
+6. 下载该候选对应 Run 的 `Netcatty-X.Y.Z-android-arm64.apk`，核对 Manifest、固定签名证书、版本号与摘要。iOS 或其他 ABI 如另行提供，分别记录其构建和验证状态。
+7. 创建对应 `vX.Y.Z` Tag，并以同名 GitHub Release 发布已核验的产物、更新说明和必要构建清单。GitHub 资产 Digest 与随附校验文件都应对应实际附件。
+8. 检查本仓库 [Releases](https://github.com/pandablin/Netcatty-mobile/releases)、README 徽章、安装包下载和 GitHub 显示的 Digest；核对来源提交、包名、签名和递增的 `versionCode`。预发布也应从完整 Releases 列表核验，不能只看 GitHub 的 `/releases/latest` 正式版入口。
 
 示例命令中的 Run ID 和版本必须替换为当前值：
 
 ```bash
-gh run download <run-id> --dir dist
+gh run download <run-id> --repo pandablin/Netcatty-mobile --dir dist
 git tag -a vX.Y.Z -m "Netcatty Mobile X.Y.Z"
 git push origin vX.Y.Z
-gh release create vX.Y.Z <assets...> --title "Netcatty Mobile X.Y.Z" --notes-file <notes.md>
+gh release create vX.Y.Z <assets...> --repo pandablin/Netcatty-mobile --title "Netcatty Mobile X.Y.Z" --notes-file <notes.md>
 ```
 
 不要在 CI 未通过时提前移动 `latest` Tag，也不要上传来自不同提交或不同 CI Run 的 Android/iOS 包。
@@ -260,10 +247,10 @@ Beta 版本必须同时满足以下约束：
 3. GitHub Release 必须标记为 Pre-release；CLI 发布时必须添加 `--prerelease`：
 
 ```bash
-gh release create vX.Y.Z-beta.N <assets...> --prerelease --title "Netcatty Mobile X.Y.Z Beta N" --notes-file <notes.md>
+gh release create vX.Y.Z-beta.N <assets...> --repo pandablin/Netcatty-mobile --prerelease --title "Netcatty Mobile X.Y.Z Beta N" --notes-file <notes.md>
 ```
 
-应用内更新检查固定使用 GitHub `/releases/latest` 正式版通道，并额外拒绝响应中的 Draft/Pre-release，因此普通用户不会收到 Beta 更新提示。Beta 测试用户需要从 Releases 页面或对应 PR 的 Actions Artifacts 手动下载安装。仅使用 `-beta.N` 标签但遗漏 `--prerelease` 会被 GitHub 当作正式 Release，严禁这样发布。
+本定制分支的应用内更新检查读取 `pandablin/Netcatty-mobile` 的 Release 列表，跳过草稿，并纳入预发布版本；不再以 `/releases/latest` 作为唯一版本来源。发布者仍须正确标记 Pre-release，并在说明中写清测试状态、安装身份及签名。用户也可从本仓库 Releases 页面或对应 Actions Run 获取附件；仅上传 Artifact 不等于已经创建可供应用检查的 Release。
 
 ## 隐私与调试信息
 

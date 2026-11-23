@@ -3,6 +3,8 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import 'sync/bounded_http_client.dart';
+
 class UpdateCheckException implements Exception {
   const UpdateCheckException(this.message);
 
@@ -37,16 +39,25 @@ class UpdateCheckService {
   UpdateCheckService({
     http.Client? client,
     this.requestTimeout = const Duration(seconds: 15),
-  })  : _client = client ?? http.Client(),
+  })  : _client = BoundedHttpClient(
+          client ?? http.Client(),
+          limitFor: (_) => maxResponseBytes,
+        ),
         _ownsClient = client == null;
 
-  /// GitHub's `latest` endpoint excludes draft and prerelease releases, so the
-  /// normal update channel never advertises beta builds.
+  /// This fork publishes Android test builds as prereleases. The release list
+  /// includes them, whereas GitHub's /latest endpoint can return 404.
   static final latestReleaseApi = Uri.parse(
-    'https://api.github.com/repos/wxte/Netcatty-mobile/releases/latest',
+    'https://api.github.com/repos/pandablin/Netcatty-mobile/releases?per_page=30',
   );
   static final latestReleasePage = Uri.parse(
-    'https://github.com/wxte/Netcatty-mobile/releases/latest',
+    'https://github.com/pandablin/Netcatty-mobile/releases',
+  );
+  static const maxResponseBytes = 2 * 1024 * 1024;
+  static final _releaseTag = RegExp(
+    r'^[vV]?[0-9]+(?:\.[0-9]+){0,2}'
+    r'(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?'
+    r'(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$',
   );
 
   final http.Client _client;
@@ -68,6 +79,8 @@ class UpdateCheckService {
       throw const UpdateCheckException('检查更新超时，请稍后重试');
     } on http.ClientException {
       throw const UpdateCheckException('无法连接 GitHub，请检查网络后重试');
+    } on StateError catch (error) {
+      throw UpdateCheckException(error.message);
     }
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
@@ -82,35 +95,56 @@ class UpdateCheckService {
     } on FormatException {
       throw const UpdateCheckException('GitHub 返回了无法识别的版本信息');
     }
-    if (decoded is! Map) {
+    if (decoded is! List) {
       throw const UpdateCheckException('GitHub 返回了无法识别的版本信息');
     }
-    if (decoded['draft'] == true || decoded['prerelease'] == true) {
-      throw const UpdateCheckException('GitHub 返回的不是正式 Release');
+    UpdateCheckResult? latest;
+    for (final release in decoded) {
+      if (release is! Map || release['draft'] == true) continue;
+      final rawTag = release['tag_name'];
+      if (rawTag is! String) continue;
+      final tagName = rawTag.trim();
+      if (!_releaseTag.hasMatch(tagName)) continue;
+      final version = tagName.replaceFirst(RegExp(r'^[vV]'), '');
+      try {
+        // Ignore malformed tags instead of allowing one to hide valid builds.
+        compareReleaseVersions(version, version);
+        if (latest == null ||
+            compareReleaseVersions(version, latest.latestVersion) > 0) {
+          latest = UpdateCheckResult(
+            currentVersion: currentVersion,
+            latestVersion: version,
+            releaseUri: _releasePage(release['html_url'], tagName),
+          );
+        }
+      } on FormatException {
+        continue;
+      }
     }
-
-    final tagName = decoded['tag_name']?.toString().trim() ?? '';
-    if (tagName.isEmpty) {
-      throw const UpdateCheckException('最新 Release 缺少版本号');
+    if (latest == null) {
+      throw const UpdateCheckException('GitHub 仓库中没有可用的 Release');
     }
-    final latestVersion = tagName.replaceFirst(RegExp(r'^[vV]'), '');
     try {
-      compareReleaseVersions(currentVersion, latestVersion);
+      compareReleaseVersions(currentVersion, latest.latestVersion);
     } on FormatException {
       throw const UpdateCheckException('最新 Release 版本号格式无效');
     }
+    return latest;
+  }
 
-    final candidate = Uri.tryParse(decoded['html_url']?.toString() ?? '');
-    final releaseUri = candidate != null &&
+  Uri _releasePage(Object? value, String tagName) {
+    final candidate = value is String ? Uri.tryParse(value) : null;
+    final expectedPath = 'pandablin/Netcatty-mobile/releases/tag/$tagName';
+    return candidate != null &&
             candidate.scheme == 'https' &&
-            candidate.host == 'github.com'
+            candidate.host == 'github.com' &&
+            candidate.port == 443 &&
+            candidate.userInfo.isEmpty &&
+            !candidate.hasQuery &&
+            !candidate.hasFragment &&
+            candidate.pathSegments.join('/') == expectedPath
         ? candidate
         : latestReleasePage;
-    return UpdateCheckResult(
-      currentVersion: currentVersion,
-      latestVersion: latestVersion,
-      releaseUri: releaseUri,
-    );
   }
 
   void close() {

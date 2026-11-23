@@ -1,0 +1,251 @@
+"""Offline Git-history fixtures: no remote network, credentials, build or publish."""
+import copy
+import json
+import os
+from pathlib import Path
+import subprocess
+import sys
+import tempfile
+import unittest
+from unittest.mock import patch
+
+from scripts.sync_upstream import (DEFAULT_POLICY, SyncStopped, Version,
+                                   choose_version, load_policy, normalize_version, prepare)
+
+
+SCRIPT = Path(__file__).resolve().parents[1] / 'scripts/sync_upstream.py'
+
+
+class GitFixture:
+    def __init__(self):
+        self.temporary = tempfile.TemporaryDirectory(prefix='netcatty-sync-test-')
+        self.root = Path(self.temporary.name)
+        self.repo = self.root / 'repo'
+        self.repo.mkdir()
+        self.git('init', '-q', '-b', 'main')
+        self.git('config', 'user.name', 'Fixture')
+        self.git('config', 'user.email', 'fixture@example.invalid')
+        self.git('config', 'core.autocrlf', 'false')
+        self.policy = copy.deepcopy(load_policy(DEFAULT_POLICY))
+        self.policy['critical_tests'] = ['test/critical.dart']
+        self.policy['required_text'] = {
+            'lib/oauth.dart': ["String.fromEnvironment('GITHUB_OAUTH_CLIENT_ID')"],
+            'lib/update.dart': ['https://api.github.com/repos/pandablin/Netcatty-mobile/releases'],
+            'lib/groups.dart': ['groupCommandSnippets'],
+            'android/app/build.gradle.kts': ['applicationId = "app.netcatty.mobile.audit"'],
+        }
+        self.write('pubspec.yaml', self.pubspec('1.9.3+45'))
+        self.write('lib/oauth.dart', "const client = String.fromEnvironment('GITHUB_OAUTH_CLIENT_ID');\n")
+        self.write('lib/update.dart', "const update = 'https://api.github.com/repos/pandablin/Netcatty-mobile/releases';\n")
+        self.write('lib/groups.dart', 'groupCommandSnippets();\n')
+        self.write('android/app/build.gradle.kts', 'applicationId = "app.netcatty.mobile.audit"\n')
+        self.write('test/critical.dart', 'keep the local security regression\n')
+        self.write('lib/shared.dart', 'base\n')
+        self.commit('base')
+        self.base = self.sha()
+        self.write('pubspec.yaml', self.pubspec('1.10.1+49'))
+        self.write('lib/local.dart', 'preserve local feature\n')
+        self.commit('local customizations')
+        self.local = self.sha()
+
+    @staticmethod
+    def pubspec(version):
+        return f'name: fixture\nversion: {version}\n\nenvironment:\n  sdk: ">=3.4.0 <4.0.0"\n'
+
+    def git(self, *arguments, check=True):
+        result = subprocess.run(['git', *arguments], cwd=self.repo,
+                                stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                env=dict(os.environ, GIT_TERMINAL_PROMPT='0'), shell=False)
+        if check and result.returncode:
+            raise AssertionError('Offline fixture Git command failed: ' + arguments[0])
+        return result.stdout.decode('utf-8').strip()
+
+    def write(self, name, text):
+        path = self.repo / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding='utf-8')
+
+    def commit(self, message):
+        self.git('add', '--all')
+        self.git('commit', '-q', '-m', message)
+
+    def sha(self):
+        return self.git('rev-parse', 'HEAD')
+
+    def upstream(self, edits=None, version='1.11.0+50'):
+        self.git('checkout', '-q', '-b', 'upstream-fixture', self.base)
+        self.write('pubspec.yaml', self.pubspec(version))
+        self.write('lib/upstream.dart', 'new upstream feature\n')
+        for name, value in (edits or {}).items():
+            self.write(name, value)
+        self.commit('upstream update')
+        upstream = self.sha()
+        self.git('update-ref', self.policy['upstream_ref'], upstream)
+        self.git('checkout', '-q', 'main')
+        return upstream
+
+    def assert_original(self, case):
+        case.assertEqual(self.sha(), self.local)
+        case.assertEqual(self.git('symbolic-ref', '--short', 'HEAD'), 'main')
+        case.assertEqual(self.git('status', '--porcelain'), '')
+        case.assertEqual(Version.parse((self.repo / 'pubspec.yaml').read_text()).build, 49)
+
+
+class SyncPreparationTests(unittest.TestCase):
+    def fixture(self):
+        fixture = GitFixture()
+        self.addCleanup(fixture.temporary.cleanup)
+        return fixture
+
+    def test_ancestor_is_no_change_without_a_commit(self):
+        fixture = self.fixture()
+        fixture.git('update-ref', fixture.policy['upstream_ref'], fixture.base)
+        result = prepare(fixture.repo, fixture.policy, fetch=False)
+        self.assertFalse(result['changed'])
+        self.assertEqual(result['sha'], fixture.local)
+        fixture.assert_original(self)
+
+    def test_version_only_conflict_is_normalized_and_both_histories_survive(self):
+        fixture = self.fixture()
+        upstream = fixture.upstream()
+        result = prepare(fixture.repo, fixture.policy, fetch=False)
+        self.assertTrue(result['changed'])
+        self.assertEqual((result['version'], result['build']), ('1.11.0', 51))
+        self.assertEqual(result['base_sha'], fixture.local)
+        self.assertEqual(result['upstream_sha'], upstream)
+        self.assertEqual(fixture.git('rev-list', '--parents', '-n', '1', 'HEAD').split()[1:],
+                         [fixture.local, upstream])
+        self.assertEqual(fixture.git('rev-parse', 'main'), fixture.local)
+        self.assertTrue((fixture.repo / 'lib/local.dart').is_file())
+        self.assertTrue((fixture.repo / 'lib/upstream.dart').is_file())
+        text = (fixture.repo / 'pubspec.yaml').read_text()
+        self.assertIn('version: 1.11.0+51\n\nenvironment:', text)
+        self.assertEqual(fixture.git('status', '--porcelain'), '')
+
+    def test_merge_and_commit_work_without_local_or_global_git_identity(self):
+        fixture = self.fixture()
+        upstream = fixture.upstream()
+        fixture.git('config', '--unset', 'user.name')
+        fixture.git('config', '--unset', 'user.email')
+        fixture.git('config', 'user.useConfigOnly', 'true')
+        empty_global = fixture.root / 'empty-global.gitconfig'
+        empty_global.write_text('', encoding='utf-8')
+        # Isolate Git's global configuration instead of modifying the user's
+        # HOME or global files, and remove inherited author/committer overrides.
+        isolated = {key: value for key, value in os.environ.items()
+                    if not key.startswith(('GIT_AUTHOR_', 'GIT_COMMITTER_',
+                                           'GIT_CONFIG_KEY_', 'GIT_CONFIG_VALUE_'))
+                    and key not in ('GIT_CONFIG_COUNT', 'EMAIL')}
+        isolated.update(GIT_CONFIG_GLOBAL=str(empty_global), GIT_CONFIG_NOSYSTEM='1')
+        with patch.dict(os.environ, isolated, clear=True):
+            missing_identity = subprocess.run(
+                ['git', 'var', 'GIT_COMMITTER_IDENT'], cwd=fixture.repo,
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=False)
+            self.assertNotEqual(missing_identity.returncode, 0)
+            result = prepare(fixture.repo, fixture.policy, fetch=False)
+            self.assertTrue(result['changed'])
+            self.assertEqual(fixture.git('show', '-s', '--format=%an|%ae|%cn|%ce', result['sha']),
+                             'github-actions[bot]|41898282+github-actions[bot]@users.noreply.github.com|'
+                             'github-actions[bot]|41898282+github-actions[bot]@users.noreply.github.com')
+            self.assertEqual(fixture.git('config', '--get', 'user.name', check=False), '')
+            self.assertEqual(fixture.git('config', '--get', 'user.email', check=False), '')
+        self.assertEqual(fixture.git('rev-parse', 'main'), fixture.local)
+        self.assertEqual(fixture.git('rev-list', '--parents', '-n', '1', result['sha']).split()[1:],
+                         [fixture.local, upstream])
+
+    def test_dart_conflict_aborts_and_never_changes_main(self):
+        fixture = self.fixture()
+        fixture.write('lib/shared.dart', 'local change\n')
+        fixture.commit('local shared edit')
+        fixture.local = fixture.sha()
+        fixture.upstream({'lib/shared.dart': 'upstream change\n'})
+        with self.assertRaisesRegex(SyncStopped, 'real merge conflict'):
+            prepare(fixture.repo, fixture.policy, fetch=False)
+        fixture.assert_original(self)
+
+    def test_release_and_lockfile_changes_stop_before_merging(self):
+        for name in ('.github/workflows/mobile.yml', 'scripts/tool.py',
+                     'android/app/build.gradle.kts', 'pubspec.lock'):
+            with self.subTest(name=name):
+                fixture = self.fixture()
+                fixture.upstream({name: 'upstream replacement\n'})
+                with self.assertRaisesRegex(SyncStopped, 'protected'):
+                    prepare(fixture.repo, fixture.policy, fetch=False)
+                fixture.assert_original(self)
+
+    def test_pubspec_dependency_change_is_not_resolved_as_a_version_conflict(self):
+        fixture = self.fixture()
+        fixture.upstream({'pubspec.yaml': fixture.pubspec('1.11.0+50') + '\ndependencies:\n  example: any\n'})
+        with self.assertRaisesRegex(SyncStopped, 'dependency review'):
+            prepare(fixture.repo, fixture.policy, fetch=False)
+        fixture.assert_original(self)
+
+    def test_local_critical_test_cannot_be_silently_replaced(self):
+        fixture = self.fixture()
+        fixture.upstream({'test/critical.dart': 'upstream removed assertions\n'})
+        with self.assertRaisesRegex(SyncStopped, 'critical test'):
+            prepare(fixture.repo, fixture.policy, fetch=False)
+        fixture.assert_original(self)
+
+    def test_owner_update_url_cannot_be_replaced(self):
+        fixture = self.fixture()
+        fixture.upstream({'lib/update.dart': "const update = 'https://api.github.com/repos/wxte/Netcatty-mobile/releases';\n"})
+        with self.assertRaisesRegex(SyncStopped, 'invariant'):
+            prepare(fixture.repo, fixture.policy, fetch=False)
+        fixture.assert_original(self)
+
+    def test_oauth_default_cannot_return(self):
+        fixture = self.fixture()
+        fixture.upstream({'lib/oauth.dart': "const client = String.fromEnvironment('GITHUB_OAUTH_CLIENT_ID', defaultValue: 'Ov23lidR2u8OIkHW19nk');\n"})
+        with self.assertRaisesRegex(SyncStopped, 'invariant'):
+            prepare(fixture.repo, fixture.policy, fetch=False)
+        fixture.assert_original(self)
+
+    def test_an_existing_candidate_is_never_forced_overwritten(self):
+        fixture = self.fixture()
+        upstream = fixture.upstream()
+        branch = fixture.policy['candidate_prefix'] + upstream
+        fixture.git('branch', branch, fixture.base)
+        with self.assertRaisesRegex(SyncStopped, 'already exists'):
+            prepare(fixture.repo, fixture.policy, fetch=False)
+        self.assertEqual(fixture.git('rev-parse', branch), fixture.base)
+        fixture.assert_original(self)
+
+    def test_cli_outputs_can_drive_ci_without_pushing_anything(self):
+        fixture = self.fixture()
+        fixture.upstream(version='1.10.0+80')
+        policy_path = fixture.root / 'policy.json'
+        policy_path.write_text(json.dumps(fixture.policy), encoding='utf-8')
+        output = fixture.root / 'github-output.txt'
+        result = subprocess.run([sys.executable, str(SCRIPT), '--repo', str(fixture.repo),
+                                 '--policy', str(policy_path), '--no-fetch'],
+                                stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                env=dict(os.environ, GITHUB_OUTPUT=str(output)), shell=False)
+        self.assertEqual(result.returncode, 0, result.stderr.decode())
+        values = json.loads(result.stdout)
+        self.assertEqual((values['version'], values['build']), ('1.10.2', 81))
+        outputs = dict(line.split('=', 1) for line in output.read_text().splitlines())
+        self.assertEqual(outputs['changed'], 'true')
+        self.assertEqual(outputs['sha'], fixture.sha())
+        self.assertEqual(fixture.git('remote'), '')
+        self.assertEqual(fixture.git('rev-parse', 'main'), fixture.local)
+
+    def test_version_order_and_build_counter_do_not_use_workflow_run_numbers(self):
+        parse = lambda value: Version.parse('version: ' + value + '\n')
+        self.assertEqual(choose_version(parse('1.10.1+49'), parse('1.11.0+2')).name, '1.11.0')
+        self.assertEqual(choose_version(parse('1.10.1+49'), parse('1.10.1+99')).build, 100)
+        self.assertTrue(parse('1.11.0+1').newer_than(parse('1.11.0-rc.1+99')))
+        self.assertTrue(parse('1.11.0-rc.10+1').newer_than(parse('1.11.0-rc.2+99')))
+        self.assertIn('\n\nenvironment:', normalize_version(GitFixture.pubspec('1.10.0+48')))
+
+    def test_policy_protects_release_identity_and_local_regressions(self):
+        policy = load_policy(DEFAULT_POLICY)
+        self.assertEqual(policy['upstream_url'], 'https://github.com/wxte/Netcatty-mobile.git')
+        self.assertTrue({'.github/**', 'scripts/**', 'android/**', 'pubspec.lock'} <= set(policy['protected_paths']))
+        self.assertIn('test/github_auth_service_test.dart', policy['critical_tests'])
+        self.assertIn('applicationId = "app.netcatty.mobile.audit"',
+                      policy['required_text']['android/app/build.gradle.kts'])
+
+
+if __name__ == '__main__':
+    unittest.main()

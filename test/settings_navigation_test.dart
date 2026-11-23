@@ -46,13 +46,15 @@ void main() {
     });
     final repository = await VaultRepository.open();
     final client = MockClient((request) async => http.Response(
-          jsonEncode({
-            'tag_name': 'v1.10.0',
-            'html_url':
-                'https://github.com/wxte/Netcatty-mobile/releases/tag/v1.10.0',
-            'draft': false,
-            'prerelease': false,
-          }),
+          jsonEncode([
+            {
+              'tag_name': 'v1.10.0',
+              'html_url':
+                  'https://github.com/pandablin/Netcatty-mobile/releases/tag/v1.10.0',
+              'draft': false,
+              'prerelease': true,
+            }
+          ]),
           200,
         ));
     final container = ProviderContainer(overrides: [
