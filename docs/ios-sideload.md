@@ -19,6 +19,7 @@
 - 后续 **Netcatty Android** 发布成功后会调用 iOS 工作流，为同一源码提交、同一 Release 补充 IPA；iOS 失败不会撤销已经成功的 Android 发布。
 - macOS/Xcode 构建使用 `flutter build ios --release --no-codesign`，无需 Apple 签名 Secrets。编译时必须注入本仓库批准的公开 OAuth Client ID。
 - 打包器核对包身份、版本、真实设备 ARM64、Live Activity 扩展、自有 OAuth/更新地址及未签名状态，并输出 iOS 专用构建清单和校验和。构建验证不等于实体设备功能测试。
+- Flutter/CocoaPods 在临时构建目录生成的工程配置会单独核验，主程序、扩展、签名身份或其他源代码被改变时停止发布。Actions 中标为 `unverified-recovery` 的 ZIP 是保留权限与链接的构建恢复备份，不能当成已经校验的 Release IPA。
 - 发布器只给已存在且源码标签一致的本仓库 Release 添加 iOS 资产；不会移动标签、删除 Android 资产或覆盖同名但摘要不同的文件。
 - iOS 构建失败会进入本仓库现有维护提醒流程。可在 Actions 查看失败阶段，修复后重新运行对应版本；已有不同摘要的产物不会被自动覆盖。
 
