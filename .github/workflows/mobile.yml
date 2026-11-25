@@ -162,3 +162,14 @@ jobs:
           ARGS=(--dist dist)
           if [[ -n "$UPSTREAM_SHA" ]]; then ARGS+=(--upstream-sha "$UPSTREAM_SHA"); fi
           python -B scripts/publish_release.py "${ARGS[@]}"
+
+  ios:
+    # Android keeps its existing release path. iOS supplements that same tagged
+    # source only after Android succeeds, including protected upstream merges.
+    needs: [checks, android]
+    if: github.repository == 'pandablin/Netcatty-mobile' && github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: write
+    uses: ./.github/workflows/ios.yml
+    with:
+      source_sha: ${{ needs.checks.outputs.sha }}

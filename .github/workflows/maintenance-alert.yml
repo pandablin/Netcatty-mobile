@@ -2,7 +2,7 @@ name: Maintenance alerts
 
 on:
   workflow_run:
-    workflows: [Sync upstream, Netcatty Android]
+    workflows: [Sync upstream, Netcatty Android, Netcatty iOS]
     types: [completed]
     branches: [main]
   workflow_dispatch:

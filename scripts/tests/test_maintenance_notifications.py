@@ -19,13 +19,14 @@ BOT_USER = {"login": alerts.BOT, "type": "Bot"}
 def raw_run(number=10, *, path=alerts.SYNC, conclusion="failure", head=HEAD, attempt=1, identity=None):
     return {
         "id": 1000 + number, "run_attempt": attempt, "run_number": number,
-        "workflow_id": 7 if path == alerts.SYNC else 8, "path": path + "@main",
+        "workflow_id": {alerts.SYNC: 7, alerts.ANDROID: 8, alerts.IOS: 9}[path], "path": path + "@main",
         "name": alerts.WORKFLOWS[path], "event": "workflow_dispatch",
         "repository": {"full_name": alerts.REPO},
         # The user's base repository itself is a fork; only foreign heads fail.
         "head_repository": {"full_name": alerts.REPO, "fork": True},
         "head_branch": "main", "head_sha": head, "pull_requests": [], "status": "completed",
-        "conclusion": conclusion, "display_title": identity or ("Android " + head if path == alerts.ANDROID else "Sync upstream"),
+        "conclusion": conclusion, "display_title": identity or ("Android " + head if path == alerts.ANDROID else
+                                                               "Unsigned iOS v1.10.1" if path == alerts.IOS else "Sync upstream"),
     }
 
 
@@ -110,6 +111,114 @@ class FakeAPI:
 
 
 class MaintenanceNotifications(unittest.TestCase):
+    def test_alert_workflow_subscribes_to_ios_completion(self):
+        workflow = (Path(__file__).resolve().parents[2] / ".github/workflows/maintenance-alert.yml").read_text(encoding="utf-8")
+        workflows = re.search(r"workflows:\s*\[([^\]]+)\]", workflow)
+        self.assertIsNotNone(workflows)
+        self.assertIn("Netcatty iOS", [name.strip() for name in workflows[1].split(",")])
+
+    def test_ios_dispatch_and_android_parent_identify_ios_failure_stages(self):
+        steps = [
+            ("Validate iOS source", "ios_validation", "iOS 构建来源检查"),
+            ("Verify immutable published source", "ios_validation", "iOS 构建来源检查"),
+            ("Check owned release exists", "ios_validation", "iOS 构建来源检查"),
+            ("Run iOS release protocol tests", "tests", "自动测试"),
+            ("Set up Xcode and CocoaPods", "toolchain", "构建工具准备"),
+            ("Install Flutter dependencies", "dependencies", "依赖准备"),
+            ("Build unsigned iOS app", "ios_build", "iOS 未签名构建"),
+            ("Verify and package the unsigned IPA", "ios_package", "iOS 安装包校验与打包"),
+            ("Publish iOS assets to the owned release", "ios_publish", "发布 iOS Release 资产"),
+            ("Run actions/checkout@v4", "toolchain", "构建工具准备"),
+            ("Run subosito/flutter-action@v2", "toolchain", "构建工具准备"),
+            ("Run actions/upload-artifact@v4", "artifact", "保存构建产物"),
+        ]
+        for path, trigger in ((alerts.IOS, "workflow_dispatch"), (alerts.ANDROID, "push"),
+                              (alerts.ANDROID, "workflow_dispatch")):
+            for step, stage, label in steps:
+                with self.subTest(path=path, trigger=trigger, step=step):
+                    api = FakeAPI(raw_run(path=path))
+                    api.run["event"] = trigger
+                    api.jobs = [{"name": "ios / unsigned-ipa", "conclusion": "failure", "steps": [
+                        {"name": step, "conclusion": "failure", "output": "raw secret @someone"}]}]
+                    run = alerts.trusted_run(api.run)
+                    self.assertEqual(alerts.failure_metadata(api, run).stage, stage)
+                    self.assertEqual(alerts.notify(api, event(api.run), CONTEXT)["action"], "created")
+                    self.assertIn(label, api.issues[0]["body"])
+                    self.assertNotIn("raw secret", api.issues[0]["body"])
+                    self.assertFalse(any("annotations" in call[1] for call in api.calls))
+
+    def test_ios_guidance_keeps_unsigned_build_and_release_recovery_distinct(self):
+        run = alerts.trusted_run(raw_run(path=alerts.IOS))
+        build = alerts.managed_body(run, alerts.Failure("ios_build"))
+        package = alerts.managed_body(run, alerts.Failure("ios_package"))
+        publish = alerts.managed_body(run, alerts.Failure("ios_publish"))
+        self.assertIn("不需要签名证书或私钥", build)
+        self.assertNotIn("安卓构建与签名", build)
+        self.assertIn("不要跳过校验发布", package)
+        self.assertIn("未签名 IPA", package)
+        self.assertIn("复用相同产物续传", publish)
+        self.assertIn("不要删除已有 Android 资产", publish)
+        self.assertIn("IPA 及摘要", publish)
+
+    def test_ios_trust_is_only_owned_main_manual_failure(self):
+        for change in ({"event": "push"}, {"event": "schedule"}, {"event": "workflow_call"},
+                       {"event": "pull_request"}, {"head_branch": "feature"},
+                       {"head_repository": {"full_name": "someone/fork"}},
+                       {"path": alerts.IOS + "@feature"}, {"name": "Netcatty Android"},
+                       {"path": alerts.ANDROID + "@main"},
+                       {"conclusion": "success"}, {"conclusion": "cancelled"}):
+            with self.subTest(change=change):
+                api = FakeAPI(raw_run(path=alerts.IOS))
+                api.run.update(change)
+                self.assertEqual(alerts.notify(api, event(api.run), CONTEXT)["action"], "ignored_event")
+                self.assertEqual(api.calls, [])
+
+    def test_ios_incident_state_roundtrips_and_repeated_failure_is_deduplicated(self):
+        api = FakeAPI(raw_run(path=alerts.IOS))
+        api.jobs = [{"name": "ios", "conclusion": "failure", "steps": [
+            {"name": "Build unsigned iOS app", "conclusion": "failure"}]}]
+        self.assertEqual(alerts.notify(api, event(api.run), CONTEXT)["action"], "created")
+        state = alerts.issue_state(api.issues[0])
+        self.assertIsNotNone(state)
+        self.assertEqual(state.workflow_path, alerts.IOS)
+        self.assertEqual(state.identity, "ios-release:v1.10.1")
+        api.advance(path=alerts.IOS)
+        self.assertEqual(alerts.notify(api, event(api.run), CONTEXT)["action"], "ignored_same_failure")
+        self.assertEqual(api.writes, [])
+
+    def test_newer_ios_success_only_suppresses_the_same_source_failure(self):
+        for title, expected in (("Unsigned iOS v1.10.1", "ignored_stale_run"),
+                                ("Unsigned iOS v1.10.2", "created")):
+            with self.subTest(title=title):
+                api = FakeAPI(raw_run(path=alerts.IOS))
+                api.recent = [api.run, raw_run(11, path=alerts.IOS, conclusion="success", identity=title)]
+                self.assertEqual(alerts.notify(api, event(api.run), CONTEXT)["action"], expected)
+                if expected == "ignored_stale_run":
+                    self.assertEqual(api.writes, [])
+
+    def test_ios_source_identity_only_parses_the_exact_trusted_title_formats(self):
+        for title, identity in (("Unsigned iOS v1.10.1", "ios-release:v1.10.1"),
+                                ("Unsigned iOS v1.10.1-rc.2", "ios-release:v1.10.1-rc.2"),
+                                ("Unsigned iOS " + "b" * 40, "ios-source:" + "b" * 40),
+                                ("Unsigned iOS refs/heads/main", None),
+                                ("Unsigned iOS v1.10.1 @someone", None),
+                                ("Unsigned iOS v1.10.1\ntrailing", None),
+                                ("Unsigned iOS v1.10.1-" + "x" * 200, None)):
+            with self.subTest(title=title):
+                run = alerts.trusted_run(raw_run(path=alerts.IOS, identity=title))
+                self.assertEqual(run.identity, identity or "head:" + HEAD + ":event:workflow_dispatch")
+                body = alerts.managed_body(run, alerts.Failure("ios_build"))
+                self.assertEqual(alerts.issue_state({"body": body}).identity, run.identity)
+                self.assertNotIn("@someone", body)
+
+    def test_ios_publish_failure_takes_priority_over_build_in_parent_metadata(self):
+        api = FakeAPI(raw_run(path=alerts.ANDROID))
+        api.jobs = [{"name": "ios / " + name, "conclusion": "failure", "steps": [
+            {"name": step, "conclusion": "failure"}]} for name, step in (
+                ("build", "Build unsigned iOS app"),
+                ("publish", "Publish iOS assets to the owned release"))]
+        self.assertEqual(alerts.failure_metadata(api, alerts.trusted_run(api.run)).stage, "ios_publish")
+
     def test_first_failure_mentions_and_assigns_only_owner_without_raw_annotations(self):
         api = FakeAPI()
         result = alerts.notify(api, event(api.run), CONTEXT)

@@ -12,6 +12,7 @@
 2. 有可合并更新时，候选推送到 `automation/upstream-<完整40位上游SHA>`，显式 dispatch 本仓库 `mobile.yml`，指定候选 `source_ref`、`promote=true`、`base_sha` 和 `upstream_sha`。
 3. `mobile.yml` 的检查和签名构建在不同虚拟机运行。检查阶段没有签名 Secrets，构建阶段按已检查的实际提交 SHA 取源码。
 4. 测试、构建及 APK 身份检查都通过后，才确认 `main` 仍指向 `base_sha` 并快进更新，随后创建本仓库 Release。
+5. Android Release 发布成功后显式调用 `ios.yml`，以同一提交构建、校验并补充未签名 IPA。iOS 构建或发布失败会提醒维护者，不撤销已经成功的 APK 发布。也可手动运行 `Netcatty iOS`，填写已发布标签补充 IPA，详见 [iOS 侧载说明](ios-sideload.md)。
 
 上游语义版本更高时采用上游版本；否则将本地 patch 加一。基础 Build Number 使用 `max(本地 Build Number, 上游 Build Number) + 1`，不用 Actions Run Number。工作流保留该基础构建号并使用 `--split-per-abi --target-platform android-arm64`，Flutter 为 ARM64 添加 2000 偏移：最终 APK 的 `versionCode = 基础 Build Number + 2000`，例如 `+49` 对应 `2049`，以便沿用已发布测试包的递增序列。
 
@@ -27,7 +28,7 @@
 
 维护提醒工作流 `Maintenance alerts` 使用 GitHub Issue 提醒维护者，不通过 Netcatty App 推送，也不需要重新打包 APK。以下说明提醒规则；是否已在远端启用、提醒测试是否通过，应以本仓库 Actions 和维护 Issue 的实际记录为准。
 
-- 仅处理本仓库 `Sync upstream`、`Netcatty Android` 在 `main` 上由 Push、手动运行或定时计划发起，且最终状态为失败或超时的 Run。成功、取消、PR 和 Fork 的运行不发送维护提醒。
+- 仅处理本仓库 `Sync upstream`、`Netcatty Android`、`Netcatty iOS` 在 `main` 上由对应的 Push、手动运行或定时计划发起，且最终状态为失败或超时的 Run。成功、取消、PR 和 Fork 的运行不发送维护提醒。被 Android 调用的 iOS 任务失败通过其父运行提醒。
 - 每个被监控工作流使用一个维护 Issue，由 GitHub Actions Bot 创建，指派给并 `@pandablin`。提醒包含 Run 链接、失败步骤和中文处理建议，依据固定同步错误代码及步骤分类，不把原始日志、环境变量或 Secrets 复制进公开 Issue。
 - 同一 Run/Attempt 不重复写入；同一源码、同一原因连续失败时也不重复写入，避免每六小时刷屏。新源码或新原因会在对应 Issue 追加评论提醒。恢复后由维护者手动关闭 Issue；关闭后再次失败时可以重新打开。
 - 提醒测试应明确标记为“提醒测试、非故障”，不能把测试 Issue 当作同步或发布出了问题的证据。

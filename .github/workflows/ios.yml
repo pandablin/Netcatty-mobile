@@ -1,0 +1,135 @@
+name: Netcatty iOS
+run-name: Unsigned iOS ${{ inputs.release_tag || inputs.source_sha }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Existing owned Android release tag to supplement with an unsigned IPA'
+        type: string
+        required: true
+        default: 'v1.10.1'
+  workflow_call:
+    inputs:
+      source_sha:
+        description: 'Exact source commit already published by the Android job'
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: netcatty-ios-release
+  cancel-in-progress: false
+
+jobs:
+  ios:
+    if: github.repository == 'pandablin/Netcatty-mobile' && github.ref == 'refs/heads/main'
+    runs-on: macos-15
+    timeout-minutes: 60
+    permissions:
+      contents: write
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
+      NETCATTY_GITHUB_OAUTH_CLIENT_ID: ${{ vars.NETCATTY_GITHUB_OAUTH_CLIENT_ID }}
+    steps:
+      - name: Validate iOS source
+        id: request
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -n "$SOURCE_SHA" ]]; then
+            [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ && -z "$RELEASE_TAG" ]] || exit 1
+            echo "ref=$SOURCE_SHA" >> "$GITHUB_OUTPUT"
+          else
+            [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]] || exit 1
+            echo "ref=refs/tags/$RELEASE_TAG" >> "$GITHUB_OUTPUT"
+          fi
+      # Build old release tags with the current trusted verification/publishing
+      # scripts; never run a publisher taken from a historical tag or artifact.
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: ci
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.request.outputs.ref }}
+          path: source
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify immutable published source
+        id: source
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os, pathlib, subprocess, sys
+          sys.path.insert(0, 'ci/scripts')
+          import package_android as common
+          root = pathlib.Path('source')
+          version = common.parse_version((root / 'pubspec.yaml').read_text(encoding='utf-8'))
+          sha = common.source_revision(root)
+          tag = 'v' + version.name
+          requested = os.environ.get('RELEASE_TAG', '')
+          common.require(not requested or requested == tag, 'Release tag differs from source version.')
+          tagged = subprocess.check_output(['git', '-C', str(root), 'rev-parse', 'refs/tags/' + tag + '^{commit}'], text=True).strip()
+          common.require(tagged == sha, 'Source does not match its existing release tag.')
+          subprocess.run(['git', '-C', str(root), 'merge-base', '--is-ancestor', sha, 'origin/main'], check=True)
+          with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as output:
+              output.write('sha=' + sha + '\ntag=' + tag + '\n')
+          PY
+      - name: Check owned release exists
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.source.outputs.tag }}
+        run: gh api "repos/pandablin/Netcatty-mobile/releases/tags/$RELEASE_TAG" > /dev/null
+      - name: Set up Xcode and CocoaPods
+        run: |
+          xcodebuild -version
+          pod --version
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.44.4
+          cache: false
+      - name: Run iOS release protocol tests
+        run: python3 -B -m unittest discover -s ci/scripts/tests -v
+      - name: Install Flutter dependencies
+        working-directory: source
+        run: flutter pub get
+      - name: Build unsigned iOS app
+        working-directory: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$NETCATTY_GITHUB_OAUTH_CLIENT_ID" == 'Ov23linUWEgoE6pMqGm6' ]] || { echo 'Unexpected public OAuth Client ID'; exit 1; }
+          flutter build ios --release --no-codesign --no-pub \
+            "--dart-define=GITHUB_OAUTH_CLIENT_ID=$NETCATTY_GITHUB_OAUTH_CLIENT_ID"
+      - name: Verify generated iOS configuration
+        run: python3 -B ci/scripts/normalize_ios_generated_config.py --source-root source
+      - name: Verify and package the unsigned IPA
+        run: >-
+          python3 -B ci/scripts/package_ios.py
+          --source-root source
+          --app build/ios/iphoneos/Runner.app
+          --output-dir dist-ios
+          --guide ci/docs/ios-sideload.md
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Netcatty-iOS-${{ steps.source.outputs.sha }}
+          path: dist-ios/*
+          if-no-files-found: error
+          retention-days: 30
+      - name: Publish iOS assets to the owned release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          python3 -B ci/scripts/publish_ios_release.py
+          --source-root source --dist dist-ios

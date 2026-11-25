@@ -27,9 +27,11 @@ BASE = "/repos/" + REPO
 BOT = "github-actions[bot]"
 SYNC = ".github/workflows/sync-upstream.yml"
 ANDROID = ".github/workflows/mobile.yml"
-WORKFLOWS = {SYNC: "Sync upstream", ANDROID: "Netcatty Android"}
+IOS = ".github/workflows/ios.yml"
+WORKFLOWS = {SYNC: "Sync upstream", ANDROID: "Netcatty Android", IOS: "Netcatty iOS"}
 FAILURES = {"failure", "timed_out", "startup_failure", "action_required"}
-EVENTS = {SYNC: {"schedule", "workflow_dispatch"}, ANDROID: {"push", "workflow_dispatch"}}
+EVENTS = {SYNC: {"schedule", "workflow_dispatch"}, ANDROID: {"push", "workflow_dispatch"},
+          IOS: {"workflow_dispatch"}}
 BLOCK_START = "<!-- netcatty-maintenance:managed:start -->"
 BLOCK_END = "<!-- netcatty-maintenance:managed:end -->"
 STATE_PREFIX = "<!-- netcatty-maintenance-state:v1 "
@@ -63,8 +65,27 @@ STAGES = {
     "artifact": ("保存构建产物", "产物保存未完成。请查看运行并重跑，不要发布未经校验的替代安装包。"),
     "promotion": ("更新 main", "main 可能已被其他提交推进，或推送未完成。请重新运行同步，不要 force-push 覆盖新提交。"),
     "publish": ("发布 Release", "main 可能已经更新，标签或部分资产可能已存在。先核对同一运行的已校验 Artifact 及已上传 SHA，复用相同产物续传；重新编译同版本的摘要可能变化，不要盲目重打或覆盖。若无法复用相同产物，请人工核对并准备新版本。"),
+    "ios_validation": ("iOS 构建来源检查", "iOS 来源检查未通过。请核对 main 上的受信工作流、所选提交或版本标签，以及已存在的自有 Android Release，修正来源后重跑；不要绕过来源检查。"),
+    "ios_build": ("iOS 未签名构建", "未签名 iOS 构建未完成。请查看运行确认 Flutter、Xcode、CocoaPods 或工程配置问题后重跑；此构建不需要签名证书或私钥，不要为修复失败而上传签名私钥。"),
+    "ios_package": ("iOS 安装包校验与打包", "iOS 安装包校验或打包未完成。请核对生成的 .app、Payload 与 IPA 结构和版本，修复后重新校验；不要跳过校验发布，也不要把未签名 IPA 当作可直接安装的已签名包。"),
+    "ios_publish": ("发布 iOS Release 资产", "Android 资产可能已经发布，iOS 资产也可能部分上传。请核对自有 Release 的标签、同一运行已校验的 IPA 及摘要，复用相同产物续传；不要删除已有 Android 资产或盲目重新编译同版本后覆盖。若无法复用相同产物，请人工核对并准备新版本。"),
     "timeout": ("运行超时", "运行超时。请打开运行页面确认卡住的阶段后重跑；未读取原始日志，不能据此判断具体故障。"),
     "unknown": ("维护运行", "维护运行未完成，安全元数据不足以定位步骤。请打开运行页面确认原因后处理。"),
+}
+IOS_STEPS = {
+    "Validate iOS source": "ios_validation",
+    "Verify immutable published source": "ios_validation",
+    "Check owned release exists": "ios_validation",
+    "Verify generated iOS configuration": "ios_validation",
+    "Run iOS release protocol tests": "tests",
+    "Set up Xcode and CocoaPods": "toolchain",
+    "Install Flutter dependencies": "dependencies",
+    "Build unsigned iOS app": "ios_build",
+    "Verify and package the unsigned IPA": "ios_package",
+    "Publish iOS assets to the owned release": "ios_publish",
+    "Run actions/checkout@v4": "toolchain",
+    "Run subosito/flutter-action@v2": "toolchain",
+    "Run actions/upload-artifact@v4": "artifact",
 }
 STEP_MAP = {
     SYNC: {
@@ -72,6 +93,8 @@ STEP_MAP = {
         "Queue Android validation and release": "queue",
     },
     ANDROID: {
+        # A reusable iOS workflow reports its jobs under this Android parent run.
+        **IOS_STEPS,
         "Validate dispatch inputs": "validation",
         "Validate candidate ancestry": "validation",
         "Run python -B -m unittest discover -s scripts/tests -v": "tests",
@@ -87,6 +110,7 @@ STEP_MAP = {
         "Promote the verified upstream candidate": "promotion",
         "Publish the owned release": "publish",
     },
+    IOS: IOS_STEPS,
 }
 
 
@@ -214,6 +238,12 @@ def trusted_run(record, *, failure_only=True):
         main = re.fullmatch(r"Android (?:main|[0-9a-f]{40})", display) if isinstance(display, str) else None
         identity = ("candidate:" + candidate[1] if candidate else
                     "main:" + head if main else "head:" + head + ":event:" + record["event"])
+    elif path == IOS:
+        display = record.get("display_title", "")
+        source = (re.fullmatch(r"Unsigned iOS (v[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?|[0-9a-f]{40})", display)
+                  if isinstance(display, str) and len(display) <= 160 else None)
+        identity = (("ios-release:" if source[1].startswith("v") else "ios-source:") + source[1]
+                    if source else "head:" + head + ":event:" + record["event"])
     return Run(record["id"], record["run_attempt"], record["run_number"], record["workflow_id"],
                path, record["event"], head, conclusion, identity)
 
@@ -323,6 +353,7 @@ def issue_state(issue):
             not isinstance(state.fingerprint, str) or not re.fullmatch(r"[0-9a-f]{64}", state.fingerprint) or
             not isinstance(state.identity, str) or not re.fullmatch(
                 r"sync:main|candidate:automation/upstream-[0-9a-f]{40}|main:[0-9a-f]{40}|"
+                r"ios-release:v[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?|ios-source:[0-9a-f]{40}|"
                 r"head:[0-9a-f]{40}:event:(?:push|workflow_dispatch)", state.identity)):
         return None
     return state
@@ -363,7 +394,7 @@ def failure_metadata(api, run):
                         pass
             matches.append(Failure(stage, reason))
     priority = {name: index for index, name in enumerate(
-        ("publish", "promotion", "package", "build", "artifact", "sync", "queue", "validation", "tests", "analysis", "format", "dependencies", "toolchain"))}
+        ("ios_publish", "publish", "promotion", "ios_package", "package", "ios_build", "build", "artifact", "sync", "queue", "ios_validation", "validation", "tests", "analysis", "format", "dependencies", "toolchain"))}
     return min(matches, key=lambda item: priority[item.stage]) if matches else Failure("timeout" if run.conclusion == "timed_out" else "unknown")
 
 
