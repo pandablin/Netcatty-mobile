@@ -90,6 +90,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ steps.source.outputs.tag }}
         run: gh api "repos/pandablin/Netcatty-mobile/releases/tags/$RELEASE_TAG" > /dev/null
+      - name: Run iOS release protocol tests
+        run: python3 -B -m unittest discover -s ci/scripts/tests -v
       - name: Set up Xcode and CocoaPods
         run: |
           xcodebuild -version
@@ -99,8 +101,6 @@ jobs:
           channel: stable
           flutter-version: 3.44.4
           cache: false
-      - name: Run iOS release protocol tests
-        run: python3 -B -m unittest discover -s ci/scripts/tests -v
       - name: Install Flutter dependencies
         working-directory: source
         run: flutter pub get
