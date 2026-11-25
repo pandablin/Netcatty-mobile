@@ -50,7 +50,7 @@ class AndroidPackageValidators(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
-        self.root = Path(self.temporary.name)
+        self.root = Path(self.temporary.name).resolve()
 
     def test_version_and_arm64_code_follow_pubspec_instead_of_a_fixed_release(self):
         self.assertEqual(package.parse_version("name: test\nversion: 1.10.1+49\n"), VERSION)

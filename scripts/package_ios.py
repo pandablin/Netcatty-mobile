@@ -178,8 +178,13 @@ def _safe_link(name: str, target: str) -> str:
 
 def bundle_inventory(app: Path) -> list[dict]:
     """lstat, never follow directory links; retain file types and Unix modes."""
-    require(app.is_dir() and not app.is_symlink() and app.name == APP_FOLDER,
+    require(not app.is_symlink(), "Runner.app itself must not be a symlink.")
+    require(app.is_dir() and app.name == APP_FOLDER,
             "--app must identify an existing non-symlink Runner.app device build.")
+    # macOS /var and /tmp can be parent-directory aliases for /private/var and
+    # /private/tmp. Compare resolved link targets against that same canonical
+    # root, after rejecting a symlink at the app root itself.
+    app = app.resolve(strict=True)
     entries, total = [], 0
     for directory, folders, files in os.walk(app, followlinks=False):
         for name in sorted(folders + files):

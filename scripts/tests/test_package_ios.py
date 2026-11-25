@@ -107,7 +107,7 @@ class IOSArchiveValidation(unittest.TestCase):
     def setUp(self):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
-        self.root = Path(temporary.name)
+        self.root = Path(temporary.name).resolve()
         self.ipa = self.root / "fixture.ipa"
 
     def rejected(self, *, overrides=None, extra=None):
@@ -241,11 +241,11 @@ class IOSPackaging(unittest.TestCase):
     def setUp(self):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
-        self.root = Path(temporary.name)
-        self.source = self.root / "historical-source"
+        self.root = Path(temporary.name).resolve()
+        self.source = (self.root / "historical-source").resolve()
         self.source.mkdir()
         (self.source / "pubspec.yaml").write_text("version: 1.10.1+49\n", encoding="utf-8")
-        self.app = self.source / "build/ios/iphoneos/Runner.app"
+        self.app = (self.source / "build/ios/iphoneos/Runner.app").resolve()
         for name, data in fixture_files().items():
             path = self.app / name
             path.parent.mkdir(parents=True, exist_ok=True)
@@ -275,6 +275,14 @@ class IOSPackaging(unittest.TestCase):
             result = package.package_ipa(self.args, environ=self.environment, **kwargs)
         self.assertEqual([call.args[0] for call in revision.call_args_list], [self.source, self.source])
         return result
+
+    def make_symlink(self, link, target, *, directory=False):
+        try:
+            link.symlink_to(target, target_is_directory=directory)
+        except (OSError, NotImplementedError):
+            if os.name == "nt":
+                self.skipTest("Host Windows filesystem cannot create symlinks; macOS/Linux must run this case.")
+            raise
 
     def test_historical_source_root_identity_outputs_and_checksums_are_explicit(self):
         result = self.package()
@@ -333,10 +341,7 @@ class IOSPackaging(unittest.TestCase):
 
     def test_zip_writer_preserves_symlink_payload_unix_type_and_file_execute_permissions(self):
         link = self.app / "Frameworks/App.framework/asset-link"
-        try:
-            link.symlink_to("../../flutter_assets/example.txt")
-        except (OSError, NotImplementedError):
-            self.skipTest("Host filesystem cannot create symlinks; run this preservation case on macOS/Linux.")
+        self.make_symlink(link, "../../flutter_assets/example.txt")
         before = package.bundle_inventory(self.app)
         destination = self.root / "link.ipa"
         package.write_ipa(self.app, destination, before)
@@ -353,12 +358,42 @@ class IOSPackaging(unittest.TestCase):
         link = self.app / "outside-link"
         target = self.root / "outside.txt"
         target.write_text("outside the bundle", encoding="utf-8")
-        try:
-            link.symlink_to(target)
-        except (OSError, NotImplementedError):
-            self.skipTest("Host filesystem cannot create symlinks.")
+        self.make_symlink(link, target)
         with self.assertRaises(package.PackagingError):
             package.bundle_inventory(self.app)
+
+    def test_parent_directory_alias_keeps_internal_symlinks_and_source_identity_valid(self):
+        alias = self.root / "parent-alias"
+        self.make_symlink(alias, self.source, directory=True)
+        link = self.app / "Frameworks/App.framework/asset-link"
+        self.make_symlink(link, "../../flutter_assets/example.txt")
+        alias_app = alias / "build/ios/iphoneos/Runner.app"
+        self.assertNotEqual(alias_app, self.app)
+        self.assertFalse(alias_app.is_symlink())
+        self.assertEqual(package.bundle_inventory(alias_app), package.bundle_inventory(self.app))
+        self.args.source_root = alias
+        # The package helper asserts both revision checks use canonical
+        # self.source, even when the CLI root traverses a parent symlink.
+        self.assertTrue(self.package()["sideload_signing_required"])
+
+    def test_parent_directory_alias_still_rejects_a_link_resolving_outside_app(self):
+        alias = self.root / "parent-alias"
+        self.make_symlink(alias, self.source, directory=True)
+        outside = self.root / "outside-directory"
+        outside.mkdir()
+        (outside / "sentinel.txt").write_bytes(b"controlled external fixture")
+        (self.app / "nested").mkdir()
+        self.make_symlink(self.app / "nested/gate", outside, directory=True)
+        self.make_symlink(self.app / "internal-link", "nested/gate/sentinel.txt")
+        alias_app = alias / "build/ios/iphoneos/Runner.app"
+        with self.assertRaisesRegex(package.PackagingError, "resolves outside"):
+            package.bundle_inventory(alias_app)
+
+    def test_app_root_itself_must_not_be_a_symlink(self):
+        linked_app = self.root / "Runner.app"
+        self.make_symlink(linked_app, self.app, directory=True)
+        with self.assertRaisesRegex(package.PackagingError, "itself must not be a symlink"):
+            package.bundle_inventory(linked_app)
 
 
 if __name__ == "__main__":
