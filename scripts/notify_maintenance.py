@@ -210,11 +210,22 @@ class State:
                    run.identity, failure.fingerprint(run))
 
 
+def ios_source_title(value):
+    return (re.fullmatch(r"Unsigned iOS (v[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?|[0-9a-f]{40})", value)
+            if isinstance(value, str) and len(value) <= 160 else None)
+
+
 def trusted_run(record, *, failure_only=True):
     if not isinstance(record, dict):
         return None
     path = workflow_path(record.get("path"))
-    if path is None or record.get("name") != WORKFLOWS[path] or record.get("event") not in EVENTS[path]:
+    if path is None or record.get("event") not in EVENTS[path]:
+        return None
+    source = ios_source_title(record.get("display_title")) if path == IOS else None
+    # GitHub can report the evaluated run-name in a run's name field. The
+    # workflow endpoint below still has to match the canonical name, ID and path.
+    if (record.get("name") != WORKFLOWS[path] and not
+            (path == IOS and source and record.get("name") == record.get("display_title"))):
         return None
     repository, head_repository = record.get("repository"), record.get("head_repository")
     if (not isinstance(repository, dict) or not isinstance(head_repository, dict) or
@@ -239,9 +250,6 @@ def trusted_run(record, *, failure_only=True):
         identity = ("candidate:" + candidate[1] if candidate else
                     "main:" + head if main else "head:" + head + ":event:" + record["event"])
     elif path == IOS:
-        display = record.get("display_title", "")
-        source = (re.fullmatch(r"Unsigned iOS (v[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?|[0-9a-f]{40})", display)
-                  if isinstance(display, str) and len(display) <= 160 else None)
         identity = (("ios-release:" if source[1].startswith("v") else "ios-source:") + source[1]
                     if source else "head:" + head + ":event:" + record["event"])
     return Run(record["id"], record["run_attempt"], record["run_number"], record["workflow_id"],

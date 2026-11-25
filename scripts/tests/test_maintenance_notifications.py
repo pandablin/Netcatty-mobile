@@ -211,6 +211,44 @@ class MaintenanceNotifications(unittest.TestCase):
                 self.assertEqual(alerts.issue_state({"body": body}).identity, run.identity)
                 self.assertNotIn("@someone", body)
 
+    def test_live_ios_run_name_metadata_is_accepted_with_canonical_workflow_identity(self):
+        # GitHub run 45578334606 reports evaluated run-name in both fields,
+        # while GET /actions/workflows/<id> retains the workflow's fixed name.
+        for title in ("Unsigned iOS v1.10.1", "Unsigned iOS v1.10.1-rc.2", "Unsigned iOS " + "b" * 40):
+            with self.subTest(title=title):
+                value = raw_run(path=alerts.IOS, identity=title)
+                value.update(id=45578334606, workflow_id=430066387, path=alerts.IOS,
+                             name=title, head_sha="7c51" + "a" * 36)
+                api = FakeAPI(value)
+                api.workflow_override = {"id": 430066387, "path": alerts.IOS, "name": "Netcatty iOS"}
+                api.jobs = [{"name": "ios", "conclusion": "failure", "steps": [
+                    {"name": "Build unsigned iOS app", "conclusion": "failure"}]}]
+                self.assertIsNotNone(alerts.trusted_run(api.run))
+                self.assertEqual(alerts.notify(api, event(api.run), CONTEXT)["action"], "created")
+                self.assertIn("iOS 未签名构建", api.issues[0]["body"])
+
+    def test_evaluated_ios_run_name_does_not_relax_other_run_or_workflow_checks(self):
+        title = "Unsigned iOS v1.10.1"
+        for change in ({"name": "Unsigned iOS v1.10.2"},
+                       {"name": "Unsigned iOS refs/heads/main", "display_title": "Unsigned iOS refs/heads/main"},
+                       {"name": title + " @someone", "display_title": title + " @someone"},
+                       {"path": alerts.ANDROID}, {"event": "push"}, {"head_branch": "feature"},
+                       {"head_repository": {"full_name": "someone/fork"}}):
+            with self.subTest(change=change):
+                api = FakeAPI(raw_run(path=alerts.IOS, identity=title))
+                api.run.update(name=title)
+                api.run.update(change)
+                self.assertEqual(alerts.notify(api, event(api.run), CONTEXT)["action"], "ignored_event")
+                self.assertEqual(api.calls, [])
+        for change in ({"name": title}, {"path": alerts.ANDROID}, {"id": 99}):
+            with self.subTest(workflow_change=change):
+                api = FakeAPI(raw_run(path=alerts.IOS, identity=title))
+                api.run["name"] = title
+                api.workflow_override = {"id": 9, "path": alerts.IOS, "name": "Netcatty iOS", **change}
+                with self.assertRaises(alerts.AlertError):
+                    alerts.notify(api, event(api.run), CONTEXT)
+                self.assertEqual(api.writes, [])
+
     def test_ios_publish_failure_takes_priority_over_build_in_parent_metadata(self):
         api = FakeAPI(raw_run(path=alerts.ANDROID))
         api.jobs = [{"name": "ios / " + name, "conclusion": "failure", "steps": [
