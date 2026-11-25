@@ -235,6 +235,7 @@ class ActualCocoaPodsTests(unittest.TestCase):
         self.reject_unchanged()
 
     def test_tracked_mode_change_is_rejected_before_other_files_restore(self):
+        self.git('config', 'core.filemode', 'true')
         self.git('update-index', '--chmod=+x', 'ios/Flutter/Debug.xcconfig')
         self.reject_unchanged()
 

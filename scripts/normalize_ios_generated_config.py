@@ -255,6 +255,8 @@ def validate_workspace(original, current):
 
 
 def changed_files(root):
+    require(not git(root, 'diff', '--cached', '--raw', '--no-abbrev', '--no-renames', '-z', 'HEAD', '--'),
+            'Staged source changes are not generated build configuration.')
     raw = git(root, 'diff', '--raw', '--no-abbrev', '--no-renames', '-z', 'HEAD', '--')
     parts = raw.split(b'\0')
     require(parts[-1] == b'' and len(parts) % 2 == 1, 'Unexpected Git change metadata.')
