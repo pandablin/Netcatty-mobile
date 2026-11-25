@@ -42,6 +42,8 @@ MH_MAGIC_64 = 0xFEEDFACF
 CPU_TYPE_ARM64 = 0x0100000C
 LC_CODE_SIGNATURE = 0x1D
 LC_BUILD_VERSION = 0x32
+LC_VERSION_MIN_IPHONEOS = 0x25
+LEGACY_VERSION_COMMANDS = {0x24, LC_VERSION_MIN_IPHONEOS, 0x2F, 0x30}
 PLATFORM_IOS = 2
 MACHO_MAGICS = {b"\xcf\xfa\xed\xfe", b"\xfe\xed\xfa\xcf", b"\xce\xfa\xed\xfe",
                 b"\xfe\xed\xfa\xce", b"\xca\xfe\xba\xbe", b"\xbe\xba\xfe\xca",
@@ -56,16 +58,34 @@ def _macho(stream, size: int, label: str, *, executable=False, unsigned=False) -
     """Read Mach-O headers/commands, never execute a binary or invoke codesign."""
     header = stream.read(32)
     require(len(header) == 32, label + ": truncated Mach-O header.")
+    outer_cpu = outer_subtype = None
+    if header[:4] == b"\xca\xfe\xba\xbe":
+        # Flutter also emits FAT32 containers with exactly one device slice.
+        # Keep this narrow: do not accept a universal/mixed architecture IPA.
+        slices = struct.unpack_from(">I", header, 4)[0]
+        require(slices == 1, label + ": FAT must contain exactly one arm64 slice.")
+        outer_cpu, outer_subtype, start, length, alignment = struct.unpack_from(">5I", header, 8)
+        require(outer_cpu == CPU_TYPE_ARM64, label + ": FAT slice is not arm64.")
+        require(alignment <= 31 and start >= 28 and start % (1 << alignment) == 0,
+                label + ": invalid FAT slice offset/alignment.")
+        require(length >= 32 and start <= size and length <= size - start,
+                label + ": FAT slice extends outside the binary.")
+        stream.seek(start)
+        header = stream.read(32)
+        require(len(header) == 32, label + ": truncated FAT slice header.")
+        size = length  # Load commands and signature offsets are slice-relative.
     magic, cpu, subtype, filetype, count, command_bytes, flags, reserved = struct.unpack("<8I", header)
     require(magic == MH_MAGIC_64 and cpu == CPU_TYPE_ARM64,
-            label + ": expected a thin 64-bit little-endian arm64 Mach-O, not a simulator/universal build.")
+            label + ": expected a 64-bit little-endian arm64 Mach-O, not a simulator/mixed build.")
+    require(outer_cpu is None or (cpu, subtype) == (outer_cpu, outer_subtype),
+            label + ": FAT table and inner Mach-O CPU identity differ.")
     require(filetype == (2 if executable else 6), label + ": unexpected Mach-O file type.")
     require(0 < count <= 4096 and count * 8 <= command_bytes <= 16 * 1024 * 1024,
             label + ": invalid Mach-O command table.")
     require(32 + command_bytes <= size, label + ": truncated Mach-O load commands.")
     commands = stream.read(command_bytes)
     require(len(commands) == command_bytes, label + ": truncated Mach-O load commands.")
-    offset, platforms, signatures = 0, [], []
+    offset, platforms, legacy, signatures = 0, [], [], []
     for _ in range(count):
         require(offset + 8 <= len(commands), label + ": missing Mach-O command.")
         command, length = struct.unpack_from("<2I", commands, offset)
@@ -77,6 +97,11 @@ def _macho(stream, size: int, label: str, *, executable=False, unsigned=False) -
             require(24 + tools * 8 <= length, label + ": truncated build tool table.")
             platforms.append({"platform": platform, "minimum_os": _packed_version(minimum),
                               "sdk": _packed_version(sdk)})
+        elif command in LEGACY_VERSION_COMMANDS:
+            require(length == 16, label + ": invalid legacy platform command.")
+            minimum, sdk = struct.unpack_from("<2I", commands, offset + 8)
+            legacy.append({"command": command, "minimum_os": _packed_version(minimum),
+                           "sdk": _packed_version(sdk)})
         elif command == LC_CODE_SIGNATURE:
             require(length >= 16, label + ": truncated code signature command.")
             data_offset, data_size = struct.unpack_from("<2I", commands, offset + 8)
@@ -84,7 +109,15 @@ def _macho(stream, size: int, label: str, *, executable=False, unsigned=False) -
             signatures.append({"offset": data_offset, "bytes": data_size})
         offset += length
     require(offset == len(commands), label + ": inconsistent Mach-O command count.")
-    require(len(platforms) == 1 and platforms[0]["platform"] == PLATFORM_IOS,
+    if not platforms and not executable and label.endswith(".dylib") and len(legacy) == 1:
+        # Apple's arm64 Swift backdeployment dylibs predate LC_BUILD_VERSION.
+        # Do not extend this fallback to the app, extension, or Flutter AOT.
+        require(legacy[0]["command"] == LC_VERSION_MIN_IPHONEOS,
+                label + ": legacy dylib platform is not iPhoneOS.")
+        platforms = [{"platform": PLATFORM_IOS, "minimum_os": legacy[0]["minimum_os"],
+                      "sdk": legacy[0]["sdk"]}]
+        legacy = []
+    require(len(platforms) == 1 and platforms[0]["platform"] == PLATFORM_IOS and not legacy,
             label + ": LC_BUILD_VERSION must identify iPhoneOS (not iOS Simulator, macOS, or Catalyst).")
     require(not unsigned or not signatures, label + ": main app/extensions must not contain LC_CODE_SIGNATURE.")
     return {"architecture": "arm64", "platform": "iPhoneOS", "file_type": filetype,

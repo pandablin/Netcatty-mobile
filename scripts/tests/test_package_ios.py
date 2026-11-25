@@ -21,15 +21,21 @@ VERSION = package.AppVersion("1.10.1", 49)
 HEAD = "a" * 40
 
 
-def macho(*, executable=False, cpu=0x0100000C, platform=2, signed=False, payload=b""):
+def macho(*, executable=False, cpu=0x0100000C, platform=2, signed=False, payload=b"", legacy=False):
     # Fixture wire format is independent of the parser; platform 7 is arm64 iOS
     # Simulator, so an arm64 CPU check alone cannot validate a device release.
-    commands = struct.pack("<6I", 0x32, 24, platform, 13 << 16, 18 << 16, 0)
+    commands = (struct.pack("<4I", 0x25, 16, 13 << 16, 18 << 16) if legacy else
+                struct.pack("<6I", 0x32, 24, platform, 13 << 16, 18 << 16, 0))
     if signed:
-        commands += struct.pack("<4I", 0x1D, 16, 32 + 40 + len(payload), 1)
+        commands += struct.pack("<4I", 0x1D, 16, 32 + len(commands) + 16 + len(payload), 1)
     header = struct.pack("<8I", 0xFEEDFACF, cpu, 0, 2 if executable else 6,
                          2 if signed else 1, len(commands), 0, 0)
     return header + commands + payload + (b"s" if signed else b"")
+
+
+def fat_arm64(binary, *, cpu=0x0100000C, subtype=0, offset=16384, alignment=14):
+    table = struct.pack(">7I", 0xCAFEBABE, 1, cpu, subtype, offset, len(binary), alignment)
+    return table + b"\0" * (offset - len(table)) + binary
 
 
 def plist_bytes(version=VERSION, *, extension=False, **changes):
@@ -142,6 +148,57 @@ class IOSArchiveValidation(unittest.TestCase):
                      valid[:20], valid[:40], valid[:36] + b"\x00" * 4 + valid[40:]):
             with self.subTest(header=data[:8]):
                 self.rejected(overrides={"Runner": data})
+
+    def test_single_arm64_fat_device_slice_is_supported_without_executable_bits_on_aot(self):
+        files = fixture_files()
+        write_ipa_fixture(self.ipa, overrides={
+            "Runner": fat_arm64(files["Runner"]),
+            package.AOT_PATH: fat_arm64(files[package.AOT_PATH]),
+        })
+        facts = package.validate_ipa(self.ipa, VERSION)
+        self.assertEqual(facts["bundles"][0]["mach_o"]["architecture"], "arm64")
+        self.assertTrue(facts["aot"]["required_markers_present"])
+        with zipfile.ZipFile(self.ipa) as archive:
+            self.assertEqual(stat.S_IMODE(archive.getinfo(package.ZIP_PREFIX + package.AOT_PATH).external_attr >> 16),
+                             0o644)
+
+    def test_fat_wrapper_rejects_extra_slices_cpu_mismatch_simulator_signatures_and_bad_ranges(self):
+        good = fat_arm64(fixture_files()[package.AOT_PATH])
+        invalid = [fat_arm64(macho(platform=7)), fat_arm64(macho(cpu=0x01000007)),
+                   fat_arm64(macho(), cpu=0x01000007), fat_arm64(macho(), subtype=2)]
+        # Mutate nfat_arch, slice offset/size/alignment independently. Offsets
+        # into the header, past EOF, or misaligned must fail before seeking.
+        for field_offset, value in [(4, 2), (4, 0xFFFFFFFF), (16, 0), (16, 24),
+                                    (16, 16385), (16, 0xFFFFFFFC), (20, 0),
+                                    (20, len(good)), (24, 32)]:
+            changed = bytearray(good)
+            struct.pack_into(">I", changed, field_offset, value)
+            invalid.append(bytes(changed))
+        for data in invalid:
+            with self.subTest(header=data[:28]):
+                self.rejected(overrides={package.AOT_PATH: data})
+        self.rejected(overrides={"Runner": fat_arm64(macho(executable=True, signed=True))})
+
+    def test_apple_legacy_iphoneos_dylib_is_allowed_without_weakening_app_or_aot_platform_checks(self):
+        library = "Frameworks/libswift_Concurrency.dylib"
+        write_ipa_fixture(self.ipa, extra={library: macho(legacy=True, signed=True)})
+        facts = package.validate_ipa(self.ipa, VERSION)
+        swift = next(item for item in facts["mach_o"] if item["path"] == library)
+        self.assertEqual((swift["platform"], swift["minimum_os"], swift["sdk"]),
+                         ("iPhoneOS", "13.0.0", "18.0.0"))
+        self.assertTrue(swift["code_signature_command_present"])
+        self.rejected(overrides={"Runner": macho(executable=True, legacy=True)})
+        self.rejected(overrides={package.AOT_PATH: macho(legacy=True)})
+        for command in (0x24, 0x2F, 0x30):
+            other = bytearray(macho(legacy=True))
+            struct.pack_into("<I", other, 32, command)
+            with self.subTest(legacy_command=command):
+                self.rejected(extra={library: bytes(other)})
+        # A modern build command mixed with any legacy platform is ambiguous.
+        modern = bytearray(macho())
+        struct.pack_into("<2I", modern, 16, 2, 40)
+        modern += struct.pack("<4I", 0x25, 16, 13 << 16, 18 << 16)
+        self.rejected(extra={library: bytes(modern)})
 
     def test_identity_display_version_and_sdk_are_required_for_main_and_widget(self):
         changes = [
