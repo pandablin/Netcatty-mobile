@@ -19,7 +19,7 @@ def normalize(root):
     changes = git(root, 'diff', '--name-only', '-z', 'HEAD', '--').decode('utf-8').split('\0')
     changes = [name for name in changes if name]
     if not set(changes) <= set(INCLUDES):
-        raise ValueError('Unexpected tracked changes after the iOS build; refusing to normalize.')
+        raise ValueError('Unexpected tracked changes after the iOS build: ' + ', '.join(changes))
     restored = {}
     for name in changes:
         path = root / name

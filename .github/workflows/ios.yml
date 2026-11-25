@@ -104,6 +104,18 @@ jobs:
       - name: Install Flutter dependencies
         working-directory: source
         run: flutter pub get
+      - name: Prepare iOS build configuration
+        working-directory: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter build ios --release --no-codesign --config-only --no-pub \
+            "--dart-define=GITHUB_OAUTH_CLIENT_ID=$NETCATTY_GITHUB_OAUTH_CLIENT_ID"
+          git status --short --untracked-files=no
+          git diff --stat HEAD
+          git diff HEAD -- ios/Flutter ios/Runner.xcodeproj/project.pbxproj ios/Runner.xcworkspace/contents.xcworkspacedata
+      - name: Verify pre-build source configuration
+        run: python3 -B ci/scripts/normalize_ios_generated_config.py --source-root source
       - name: Build unsigned iOS app
         working-directory: source
         shell: bash
@@ -112,6 +124,19 @@ jobs:
           [[ "$NETCATTY_GITHUB_OAUTH_CLIENT_ID" == 'Ov23linUWEgoE6pMqGm6' ]] || { echo 'Unexpected public OAuth Client ID'; exit 1; }
           flutter build ios --release --no-codesign --no-pub \
             "--dart-define=GITHUB_OAUTH_CLIENT_ID=$NETCATTY_GITHUB_OAUTH_CLIENT_ID"
+      - name: Archive built app for validation recovery
+        run: |
+          ditto -c -k --keepParent source/build/ios/iphoneos/Runner.app "$RUNNER_TEMP/Runner-unsigned-recovery.zip"
+          git -C source diff HEAD > "$RUNNER_TEMP/generated-ios-configuration.patch"
+      - name: Retain unverified app for validation recovery
+        uses: actions/upload-artifact@v4
+        with:
+          name: Netcatty-iOS-unverified-recovery-${{ steps.source.outputs.sha }}-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/Runner-unsigned-recovery.zip
+            ${{ runner.temp }}/generated-ios-configuration.patch
+          if-no-files-found: error
+          retention-days: 7
       - name: Verify generated iOS configuration
         run: python3 -B ci/scripts/normalize_ios_generated_config.py --source-root source
       - name: Verify and package the unsigned IPA
